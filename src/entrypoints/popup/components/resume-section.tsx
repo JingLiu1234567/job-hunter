@@ -8,39 +8,29 @@ import { getResume, setResume } from "@/utils/job-match/storage"
  * fully self-contained (no imports / outer references).
  */
 function scrapeLinkedInProfile(): string {
-  const parts: string[] = []
-
-  const h1 = document.querySelector("h1")
-  if (h1 && h1.innerText.trim()) {
-    parts.push(`姓名：${h1.innerText.trim()}`)
+  // Deliberately old-school, dependency-free syntax: this runs in the page via
+  // executeScript, so it must survive serialization and reference nothing outside.
+  function clean(raw: string): string {
+    const lines = (raw || "").split("\n")
+    const out: string[] = []
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim()
+      // skip blanks and consecutive duplicate lines (LinkedIn renders many twice)
+      if (line && line !== out[out.length - 1]) {
+        out.push(line)
+      }
+    }
+    return out.join("\n").slice(0, 8000)
   }
 
-  const sectionIds = [
-    "about",
-    "experience",
-    "education",
-    "skills",
-    "licenses_and_certifications",
-    "projects",
-    "honors_and_awards",
-  ]
-  for (const id of sectionIds) {
-    const anchor = document.getElementById(id)
-    const section = anchor ? anchor.closest("section") : null
-    if (!section) {
-      continue
-    }
-    const raw = (section as HTMLElement).innerText || ""
-    // LinkedIn duplicates many labels (visible + screen-reader copy) — drop
-    // consecutive identical lines.
-    const lines = raw.split("\n").map(l => l.trim()).filter(Boolean)
-    const deduped = lines.filter((line, i) => line !== lines[i - 1])
-    if (deduped.length) {
-      parts.push(deduped.join("\n"))
-    }
+  // The whole main profile column — robust against LinkedIn's changing section ids.
+  const main = document.querySelector("main")
+  const mainText = main && main.innerText ? clean(main.innerText) : ""
+  if (mainText.length > 100) {
+    return mainText
   }
-
-  return parts.join("\n\n")
+  // Fallback: the entire page.
+  return clean(document.body && document.body.innerText ? document.body.innerText : "")
 }
 
 /**
