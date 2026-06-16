@@ -21,6 +21,7 @@ import { matchDomainPattern } from "@/utils/url"
 import { enablePageTranslationAtom, isDraggingButtonAtom } from "../../atoms"
 import { shadowWrapper } from "../../index"
 import HiddenButton from "./components/hidden-button"
+import MatchButton from "./match-button"
 import TranslateButton from "./translate-button"
 
 const readFrogLogoUrl = new URL(readFrogLogo, browser.runtime.getURL("/")).href
@@ -356,6 +357,12 @@ export default function FloatingButton() {
     >
       {!isDraggingButton && (
         <TranslateButton
+          side={floatingButtonSide}
+          expanded={isFloatingButtonExpanded}
+        />
+      )}
+      {!isDraggingButton && (
+        <MatchButton
           side={floatingButtonSide}
           expanded={isFloatingButtonExpanded}
         />
