@@ -60,17 +60,23 @@ export async function analyzeMatch(resume: string, jd: string): Promise<MatchRes
     throw new Error("插件配置未找到，请先在设置里配置 LLM 服务商")
   }
 
-  // 匹配分析必须用大模型(LLM)，不能用微软/谷歌这类纯翻译服务。
-  // 优先用当前翻译服务商（若它本身就是 LLM），否则找一个已启用的 LLM 服务商。
+  // 匹配分析必须用大模型(LLM)，不能用微软/谷歌这类纯翻译服务，
+  // 也要跳过没填 API Key 的占位（如 Read Frog 自带的空 OpenAI）。
+  function hasApiKey(p: Config["providersConfig"][number]): boolean {
+    const key = (p as { apiKey?: unknown }).apiKey
+    return typeof key === "string" && key.trim().length > 0
+  }
+
   const providers = config.providersConfig
-  const translateProvider = providers.find(p => p.id === config.translate.providerId)
+  const llmWithKey = providers.filter(p => isLLMProvider(p.provider) && hasApiKey(p))
+  // 优先已启用且有 key 的；其次有 key 但未启用的；最后本地 Ollama（无需 key）。
   const providerId
-    = translateProvider && isLLMProvider(translateProvider.provider) && translateProvider.enabled
-      ? translateProvider.id
-      : providers.find(p => isLLMProvider(p.provider) && p.enabled)?.id
+    = llmWithKey.find(p => p.enabled)?.id
+      ?? llmWithKey[0]?.id
+      ?? providers.find(p => p.provider === "ollama" && p.enabled)?.id
 
   if (!providerId) {
-    throw new Error("没找到可用的大模型(LLM)。请在插件设置里启用 DeepSeek 等 LLM 服务商并填好 API Key")
+    throw new Error("没找到已填 API Key 的大模型(LLM)。请在插件设置里给 DeepSeek 填好 API Key 并启用")
   }
 
   // 走后台代理跑 LLM（复用 Read Frog 的 backgroundGenerateText，天然避开内容脚本的跨域限制）
