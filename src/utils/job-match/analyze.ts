@@ -1,5 +1,6 @@
 import type { Config } from "@/types/config/config"
 import { storage } from "#imports"
+import { isLLMProvider } from "@/types/config/provider"
 import { CONFIG_STORAGE_KEY } from "@/utils/constants/config"
 import { sendMessage } from "@/utils/message"
 
@@ -56,12 +57,25 @@ export async function analyzeMatch(resume: string, jd: string): Promise<MatchRes
 
   const config = await storage.getItem<Config>(`local:${CONFIG_STORAGE_KEY}`)
   if (!config) {
-    throw new Error("插件配置未找到，请先在设置里配置翻译服务商")
+    throw new Error("插件配置未找到，请先在设置里配置 LLM 服务商")
+  }
+
+  // 匹配分析必须用大模型(LLM)，不能用微软/谷歌这类纯翻译服务。
+  // 优先用当前翻译服务商（若它本身就是 LLM），否则找一个已启用的 LLM 服务商。
+  const providers = config.providersConfig
+  const translateProvider = providers.find(p => p.id === config.translate.providerId)
+  const providerId
+    = translateProvider && isLLMProvider(translateProvider.provider) && translateProvider.enabled
+      ? translateProvider.id
+      : providers.find(p => isLLMProvider(p.provider) && p.enabled)?.id
+
+  if (!providerId) {
+    throw new Error("没找到可用的大模型(LLM)。请在插件设置里启用 DeepSeek 等 LLM 服务商并填好 API Key")
   }
 
   // 走后台代理跑 LLM（复用 Read Frog 的 backgroundGenerateText，天然避开内容脚本的跨域限制）
   const { text } = await sendMessage("backgroundGenerateText", {
-    providerId: config.translate.providerId,
+    providerId,
     system: SYSTEM_PROMPT,
     prompt: `【求职者简历】\n${resume}\n\n【职位描述 JD】\n${jd}`,
     temperature: 0,
