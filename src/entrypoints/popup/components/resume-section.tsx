@@ -1,0 +1,49 @@
+import { useEffect, useState } from "react"
+import { getResume, setResume } from "@/utils/job-match/storage"
+
+/**
+ * "我的简历" — paste & save resume text in the popup.
+ * Stored locally; used later by the job-match scoring feature.
+ */
+export function ResumeSection() {
+  const [text, setText] = useState("")
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    void getResume().then(setText)
+  }, [])
+
+  const handleSave = async () => {
+    await setResume(text)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-neutral-200 pt-3 dark:border-neutral-800">
+      <div className="flex items-center justify-between">
+        <span className="text-[13px] font-medium">我的简历</span>
+        <button
+          type="button"
+          onClick={() => void handleSave()}
+          className="cursor-pointer rounded-md bg-green-500 px-2.5 py-0.5 text-xs font-medium text-white transition-colors hover:bg-green-600"
+        >
+          {saved ? "已保存 ✓" : "保存"}
+        </button>
+      </div>
+      <textarea
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value)
+          setSaved(false)
+        }}
+        rows={5}
+        placeholder="把简历内容粘贴到这里，保存后用于职位匹配分析…"
+        className="border-border bg-background w-full resize-none rounded-md border p-2 text-xs leading-relaxed outline-none focus:border-green-500"
+      />
+      <span className="text-xs text-neutral-500 dark:text-neutral-400">
+        {text.trim().length > 0 ? `${text.trim().length} 字` : "尚未填写简历"}
+      </span>
+    </div>
+  )
+}
