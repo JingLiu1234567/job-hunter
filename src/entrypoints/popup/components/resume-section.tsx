@@ -55,6 +55,12 @@ export function ResumeSection() {
 
   useEffect(() => {
     void getResume().then(setText)
+    // On open, nudge the user if they're already on their LinkedIn profile.
+    void browser.tabs.query({ active: true, currentWindow: true }).then((tabs) => {
+      if ((tabs[0]?.url ?? "").includes("linkedin.com/in/")) {
+        setHint("✅ 已在领英主页，点「领英导入」即可一键读取")
+      }
+    })
   }, [])
 
   const handleSave = async () => {
