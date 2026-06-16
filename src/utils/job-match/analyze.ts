@@ -134,7 +134,8 @@ export async function analyzeMatch(resume: string, jd: string): Promise<MatchRes
     .filter(r => r.text)
     .map(r => ({ text: r.text as string, type: (r.type === "nice" ? "nice" : "must") as ReqType }))
   if (requirements.length === 0) {
-    throw new Error("没能从这个页面解析出职位要求，确认在职位详情页再试")
+    const preview = jd.replace(/\s+/g, " ").slice(0, 80)
+    throw new Error(`没能解析出职位要求（抓到正文约 ${jd.length} 字，开头：「${preview}…」）。确认在职位详情页再试`)
   }
 
   // Step 2：逐条比对简历
