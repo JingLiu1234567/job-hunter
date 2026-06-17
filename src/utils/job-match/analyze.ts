@@ -40,12 +40,18 @@ function extractJson(raw: string): string {
 }
 
 // ---- Step 1: 只看 JD，客观抽取要求（不看简历，避免偏向已匹配项）----
-const EXTRACT_SYSTEM = `你是招聘要求分析专家。给你一段职位描述(JD)，请提取它对候选人的所有要求点。
-区分两类：
-- "must"：硬性/必备要求（required / must-have / 缺了基本没戏，如核心技能、年限、学历、签证/语言硬门槛）
-- "nice"：加分项（preferred / nice-to-have / bonus）
-要求要具体（写清是什么技能/几年/什么学历/哪种语言），不要笼统。每条用简洁中文。
-只看 JD，不要分析任何候选人。只输出 JSON，不要多余文字、不要代码块：
+const EXTRACT_SYSTEM = `你是招聘要求分析专家。请从职位描述(JD)中**穷尽地、忠实地**提取对候选人的要求，按下面三类来源全部覆盖，不要遗漏：
+
+A. 显式要求段（标题常见：Minimum Qualifications / Requirements / Qualifications / Basic Qualifications / What you'll need / Who you are 等）：把这一段里**每一条都列出来**，标为 must（除非该段写明是 preferred）。
+B. 隐含要求：从 Responsibilities / Position Overview / About the role 等背景段落里，提炼出隐含的能力或经验要求，也标为 must。
+C. 加分项（标题常见：Preferred Qualifications / Nice to have / Bonus）：标为 nice。
+
+铁律：
+1. 忠实保留具体信息——年限（如"3年以上"）、学历及专业（如"本科，计算机/数据科学等相关专业"）、技术/工具/证书/语言名。**禁止**概括成"具有X方面的扎实背景"这类笼统说法。
+2. 一个要点对应一条。"3年以上 applied AI / automation / 等领域经验"是**一条**"3年以上相关领域经验"，**不要**拆成多条笼统"背景"。
+3. 宁可多列、绝不漏抽，尤其 A 段每一条都必须在。
+
+只看 JD，不分析任何候选人。每条用简洁中文但保留关键数字/学历/专业/技术名。只输出 JSON，不要多余文字、不要代码块：
 {"requirements":[{"text":"要求点","type":"must"或"nice"}]}`
 
 // ---- Step 2: 拿要求逐条比简历，严格诚实，不许抬分 ----
