@@ -168,6 +168,10 @@ export async function analyzeMatch(resume: string, jd: string): Promise<MatchRes
       note: m.note,
     }))
 
+  if (matched.length === 0) {
+    throw new Error("匹配结果为空，请重试（模型可能未正确返回）")
+  }
+
   // must 排在前面，方便用户先看硬要求
   matched.sort((a, b) => (a.type === b.type ? 0 : a.type === "must" ? -1 : 1))
 
