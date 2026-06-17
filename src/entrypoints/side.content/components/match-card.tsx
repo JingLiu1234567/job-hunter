@@ -35,15 +35,6 @@ function RequirementRow({ req }: { req: RequirementMatch }) {
       <MetIcon met={req.met} />
       <div className="min-w-0">
         <span>{req.text}</span>
-        <span
-          className={`ml-1.5 rounded px-1 py-0.5 text-[10px] font-medium ${
-            req.type === "must"
-              ? "bg-neutral-200 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300"
-              : "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
-          }`}
-        >
-          {req.type === "must" ? "必须" : "加分"}
-        </span>
         {req.note && (
           <span className="block text-[11px] leading-snug text-neutral-400">{req.note}</span>
         )}
@@ -54,7 +45,10 @@ function RequirementRow({ req }: { req: RequirementMatch }) {
 
 function ResultView({ result }: { result: MatchResult }) {
   const meta = VERDICT_META[result.verdict]
-  const metCount = result.requirements.filter(r => r.met === "yes").length
+  const musts = result.requirements.filter(r => r.type === "must")
+  const nices = result.requirements.filter(r => r.type === "nice")
+  const mustMet = musts.filter(r => r.met === "yes").length
+  const niceMet = nices.filter(r => r.met === "yes").length
 
   return (
     <div className="flex flex-col gap-3">
@@ -63,7 +57,8 @@ function ResultView({ result }: { result: MatchResult }) {
           {meta.emoji} {meta.label}
         </span>
         <span className="ml-auto text-xs text-neutral-500">
-          匹配 {metCount}/{result.requirements.length} 条
+          必须 {mustMet}/{musts.length}
+          {nices.length > 0 && ` · 加分 ${niceMet}/${nices.length}`}
         </span>
       </div>
 
@@ -71,10 +66,27 @@ function ResultView({ result }: { result: MatchResult }) {
         💡 {result.recommendation}
       </p>
 
+      {result.flexible && (
+        <p className="rounded-md border border-red-400 bg-red-50 p-2 text-[13px] font-semibold leading-relaxed text-red-600 dark:border-red-700 dark:bg-red-950 dark:text-red-400">
+          ✱ 招聘方说明：不必满足全部要求，方向契合也欢迎投递
+        </p>
+      )}
+
       <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto">
-        {result.requirements.map(req => (
-          <RequirementRow key={`${req.type}-${req.text}`} req={req} />
+        <span className="text-xs font-semibold text-neutral-500">必须要求</span>
+        {musts.map(req => (
+          <RequirementRow key={`must-${req.text}`} req={req} />
         ))}
+
+        {nices.length > 0 && (
+          <>
+            <div className="my-1.5 border-t border-neutral-200 dark:border-neutral-700" />
+            <span className="text-xs font-semibold text-neutral-500">加分项</span>
+            {nices.map(req => (
+              <RequirementRow key={`nice-${req.text}`} req={req} />
+            ))}
+          </>
+        )}
       </div>
     </div>
   )

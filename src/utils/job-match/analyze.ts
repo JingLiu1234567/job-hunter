@@ -25,6 +25,8 @@ export interface MatchResult {
   verdict: Verdict
   /** 一句话建议（投不投 + 为什么），由清单规则生成，保证与逐条结果一致 */
   recommendation: string
+  /** JD 是否明示"不必满足全部要求"（前端醒目提示用） */
+  flexible: boolean
 }
 
 const THINK_TAG_RE = /<\/think>([\s\S]*)/
@@ -80,32 +82,72 @@ async function callLLM(providerId: string, system: string, prompt: string): Prom
   return text
 }
 
-/** 把逐条匹配结果汇成 🟢🟡🔴 结论 + 一句话建议（透明规则，与清单一致）。 */
+// JD 是否明示"不必满足全部要求"（命中则放宽结论门槛）。
+const FLEXIBLE_PATTERNS = [
+  "don't tick every box",
+  "dont tick every box",
+  "don't have all",
+  "dont have all",
+  "don't meet every",
+  "dont meet every",
+  "even if you don't",
+  "even if you dont",
+  "still love to hear",
+  "encouraged to apply",
+  "you don't need to meet",
+  "good fit",
+  "don't worry if",
+]
+
+function jdIsFlexible(jd: string): boolean {
+  const lower = jd.toLowerCase()
+  return FLEXIBLE_PATTERNS.some(p => lower.includes(p))
+}
+
+/**
+ * must 主导的结论规则：
+ * - must 全满足 → 🟢（不看 nice）
+ * - must 满足 ≤ 一半 → 🔴（不看 nice）
+ * - must 超过一半但未全满足 → 中间档：仅当 nice 满足 ≥70% 才升 🟢，否则 🟡
+ */
 function decide(reqs: RequirementMatch[]): { verdict: Verdict, recommendation: string } {
   const musts = reqs.filter(r => r.type === "must")
-  const mustMissing = musts.filter(r => r.met === "no").map(r => r.text)
-  const mustUnclear = musts.filter(r => r.met === "unclear").map(r => r.text)
-  const niceMissing = reqs.filter(r => r.type === "nice" && r.met !== "yes").map(r => r.text)
+  const nices = reqs.filter(r => r.type === "nice")
+  const mustTotal = musts.length
+  const mustMet = musts.filter(r => r.met === "yes").length
+  const niceTotal = nices.length
+  const niceMet = nices.filter(r => r.met === "yes").length
+  const missing = musts.filter(r => r.met !== "yes").map(r => r.text)
 
-  if (mustMissing.length > 0) {
-    return {
-      verdict: "skip",
-      recommendation: `不建议投：你不满足硬性要求 ——「${mustMissing.join("、")}」`,
-    }
+  const mustRatio = mustTotal === 0 ? 1 : mustMet / mustTotal
+
+  let verdict: Verdict
+  if (mustRatio >= 1) {
+    verdict = "recommend"
   }
-  if (mustUnclear.length > 0) {
-    return {
-      verdict: "maybe",
-      recommendation: `可以考虑：硬性要求大体满足，但这些简历没体现 ——「${mustUnclear.join("、")}」，投前最好补上`,
-    }
+  else if (mustRatio <= 0.5) {
+    verdict = "skip"
   }
-  if (niceMissing.length > 0) {
-    return {
-      verdict: "recommend",
-      recommendation: `值得投：硬性要求都匹配，缺的只是加分项（${niceMissing.join("、")}），不影响`,
-    }
+  else {
+    // 中间档：仅当存在加分项且满足度 ≥70% 时升绿
+    const niceLift = niceTotal > 0 && niceMet / niceTotal >= 0.7
+    verdict = niceLift ? "recommend" : "maybe"
   }
-  return { verdict: "recommend", recommendation: "值得投：要求基本都匹配" }
+
+  let recommendation: string
+  if (verdict === "recommend") {
+    recommendation = missing.length === 0
+      ? `值得投：硬性要求全部满足（${mustMet}/${mustTotal}）`
+      : `值得投：硬性要求满足 ${mustMet}/${mustTotal}，加分项满足度高，仅差「${missing.join("、")}」`
+  }
+  else if (verdict === "maybe") {
+    recommendation = `可以考虑：硬性要求满足 ${mustMet}/${mustTotal}，欠缺「${missing.join("、")}」，投前最好补强`
+  }
+  else {
+    recommendation = `不建议投：硬性要求只满足 ${mustMet}/${mustTotal}，差距较大`
+  }
+
+  return { verdict, recommendation }
 }
 
 export async function analyzeMatch(resume: string, jd: string): Promise<MatchResult> {
@@ -176,5 +218,5 @@ export async function analyzeMatch(resume: string, jd: string): Promise<MatchRes
   matched.sort((a, b) => (a.type === b.type ? 0 : a.type === "must" ? -1 : 1))
 
   const { verdict, recommendation } = decide(matched)
-  return { requirements: matched, verdict, recommendation }
+  return { requirements: matched, verdict, recommendation, flexible: jdIsFlexible(jd) }
 }
