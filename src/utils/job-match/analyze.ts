@@ -40,18 +40,23 @@ function extractJson(raw: string): string {
 }
 
 // ---- Step 1: 只看 JD，客观抽取要求（不看简历，避免偏向已匹配项）----
-const EXTRACT_SYSTEM = `你是招聘要求分析专家。请从职位描述(JD)中**穷尽地、忠实地**提取对候选人的要求，按下面三类来源全部覆盖，不要遗漏：
+const EXTRACT_SYSTEM = `你是招聘要求分析专家。请从职位描述(JD)中提取**对候选人的资格要求**（候选人需要"具备"什么），分两类：
 
-A. 显式要求段（标题常见：Minimum Qualifications / Requirements / Qualifications / Basic Qualifications / What you'll need / Who you are 等）：把这一段里**每一条都列出来**，标为 must（除非该段写明是 preferred）。
-B. 隐含要求：从 Responsibilities / Position Overview / About the role 等背景段落里，提炼出隐含的能力或经验要求，也标为 must。
-C. 加分项（标题常见：Preferred Qualifications / Nice to have / Bonus）：标为 nice。
+- "must"：硬性资格。常见段落标题（写法多样，按含义识别，不要死抠字面）：Minimum/Basic/Required Qualifications、Qualifications、Requirements、Required Skills、What you'll need、What you bring、Who you are、About you、Skills & Experience、Must have、Essential、We're looking for、任职要求、岗位要求 等。**逐条**提取。
+- "nice"：加分项。常见标题：Preferred Qualifications、Nice to have、Nice-to-haves、Bonus、Bonus points、A plus、Plus、Desirable、Good to have、Advantageous、Ideally、Even better、加分项、优先 等。**逐条**提取。
+
+关键区分（很重要）：
+- 按**功能**判断，不要死抠标题文字：凡是"候选人需要具备/最好具备的条件"就是资格要求；标题怎么写都算。
+- **只提取"候选人需要具备的资格"**：学历、年限、技能、工具、经验、证书、语言等。
+- **绝不要**把 "Responsibilities / 工作职责 / 你将要做什么(will / responsible for / 动词开头的职责句)" 当成要求——那是岗位职责，不是对候选人的资格，一律忽略。
+- 只有当 JD 完全没有任何资格段落时，才从全文推断候选人必须具备的硬性条件。
 
 铁律：
-1. 忠实保留具体信息——年限（如"3年以上"）、学历及专业（如"本科，计算机/数据科学等相关专业"）、技术/工具/证书/语言名。**禁止**概括成"具有X方面的扎实背景"这类笼统说法。
-2. 一个要点对应一条。"3年以上 applied AI / automation / 等领域经验"是**一条**"3年以上相关领域经验"，**不要**拆成多条笼统"背景"。
-3. 宁可多列、绝不漏抽，尤其 A 段每一条都必须在。
+1. 忠实保留具体信息——年限（如"3年以上"）、学历及专业、技术/工具/证书/语言名。**禁止**概括成"具有X方面的扎实背景"。
+2. 一个要点对应一条，保留关键数字/学历/专业/技术名。
+3. 资格段落里每一条都要在，别漏。
 
-只看 JD，不分析任何候选人。每条用简洁中文但保留关键数字/学历/专业/技术名。只输出 JSON，不要多余文字、不要代码块：
+只看 JD，不分析候选人。每条用简洁中文。只输出 JSON，不要多余文字、不要代码块：
 {"requirements":[{"text":"要求点","type":"must"或"nice"}]}`
 
 // ---- Step 2: 拿要求逐条比简历，严格诚实，不许抬分 ----
