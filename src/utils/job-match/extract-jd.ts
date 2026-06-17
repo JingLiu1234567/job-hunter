@@ -1,6 +1,8 @@
 // Extract the job-description text from the current page.
-// Targets LinkedIn's JD containers (both the job-view page and the search-page
-// detail panel), then a requirement-keyword-anchored block, then main, then body.
+// Primary strategy is layout-independent: locate the "About the job" heading in
+// the page text and slice from there. This avoids grabbing a stale/previous
+// job's leftover DOM on LinkedIn's SPA search page, and doesn't depend on
+// LinkedIn's ever-changing class names.
 
 const LINKEDIN_JD_SELECTORS = [
   ".jobs-description__content",
@@ -8,36 +10,28 @@ const LINKEDIN_JD_SELECTORS = [
   ".jobs-box__html-content",
   "#job-details",
   "article.jobs-description__container",
-  ".jobs-description",
   ".jobs-search__job-details",
   ".jobs-details__main-content",
-  ".scaffold-layout__detail",
 ]
 
-// Words that signal we're looking at the actual requirements/JD body.
-const JD_KEYWORDS = [
+// Headings that mark the start of the real JD body (in priority order).
+const PRIMARY_ANCHORS = ["About the job", "About this role", "About this job"]
+const SECTION_ANCHORS = [
+  "Role Description",
+  "Position Overview",
+  "Principal Accountabilities",
   "Responsibilities",
-  "Qualifications",
+  "Minimum Qualifications",
   "Requirements",
-  "About the job",
-  "About the role",
-  "What you",
-  "Who you are",
-  "Minimum qualifications",
-  "Preferred qualifications",
-  "职责",
+  "Qualifications",
+  "Required Skills",
+  "职位描述",
+  "岗位职责",
   "任职要求",
-  "岗位要求",
 ]
 
 const MAX_JD_CHARS = 9000
 
-/**
- * Drop lines that are mostly Chinese. When the user has the translate button on,
- * Read Frog injects Chinese translation nodes into the page, so innerText becomes
- * bilingual — we only want the original English JD.
- * Skipped entirely if the page has little English (a genuinely Chinese JD).
- */
 function stripInjectedTranslations(text: string): string {
   const latinTotal = text.match(/[a-z]/gi)?.length ?? 0
   if (latinTotal < 200) {
@@ -61,50 +55,58 @@ function clean(text: string): string {
     .slice(0, MAX_JD_CHARS)
 }
 
-/** Find the tightest element that contains JD keywords — likely the JD body. */
-function findByKeyword(): string {
-  let best = ""
-  for (const el of document.querySelectorAll<HTMLElement>("section, article, div")) {
-    const text = el.innerText ?? ""
-    if (text.length < 200 || text.length > 9000)
-      continue
-    if (!JD_KEYWORDS.some(kw => text.includes(kw)))
-      continue
-    // prefer the tightest container (least surrounding noise)
-    if (best === "" || text.length < best.length)
-      best = text
+/** Slice the page text from the JD heading onward (current job, not stale ones). */
+function sliceFromAnchor(text: string): string {
+  for (const anchor of PRIMARY_ANCHORS) {
+    const i = text.indexOf(anchor)
+    if (i !== -1) {
+      return text.slice(i)
+    }
   }
-  return best
+  let earliest = -1
+  for (const anchor of SECTION_ANCHORS) {
+    const i = text.indexOf(anchor)
+    if (i !== -1 && (earliest === -1 || i < earliest)) {
+      earliest = i
+    }
+  }
+  return earliest === -1 ? "" : text.slice(earliest)
+}
+
+function isVisible(el: HTMLElement): boolean {
+  const rect = el.getBoundingClientRect()
+  return rect.width > 0 && rect.height > 0
 }
 
 export function extractJD(): string {
-  // 1) LinkedIn-specific containers
+  // 1) Layout-independent: slice from the "About the job" heading in page text.
+  const fromAnchor = sliceFromAnchor(document.body?.innerText ?? "")
+  if (fromAnchor.trim().length > 200) {
+    return clean(fromAnchor)
+  }
+
+  // 2) LinkedIn description containers — pick the largest VISIBLE one.
+  let best = ""
   for (const selector of LINKEDIN_JD_SELECTORS) {
-    const el = document.querySelector<HTMLElement>(selector)
-    const text = el?.innerText?.trim()
-    if (text && text.length > 120) {
-      return clean(text)
+    for (const el of document.querySelectorAll<HTMLElement>(selector)) {
+      if (!isVisible(el))
+        continue
+      const text = el.innerText ?? ""
+      if (text.length > best.length) {
+        best = text
+      }
     }
   }
-
-  // 2) Keyword-anchored block (works on most job sites)
-  const byKeyword = findByKeyword()
-  if (byKeyword.length > 120) {
-    return clean(byKeyword)
+  if (best.length > 120) {
+    return clean(best)
   }
 
-  // 3) Largest main/article region
-  let best = ""
+  // 3) Largest main/article region, else whole body.
   for (const el of document.querySelectorAll<HTMLElement>("main, article, [role=main]")) {
     const text = el.innerText?.trim() ?? ""
     if (text.length > best.length) {
       best = text
     }
   }
-  if (best.length > 150) {
-    return clean(best)
-  }
-
-  // 4) Fallback: whole page
-  return clean(document.body?.innerText ?? "")
+  return clean(best || document.body?.innerText || "")
 }
