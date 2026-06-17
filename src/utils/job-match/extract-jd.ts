@@ -30,10 +30,31 @@ const JD_KEYWORDS = [
   "岗位要求",
 ]
 
-const MAX_JD_CHARS = 6000
+const MAX_JD_CHARS = 9000
+
+/**
+ * Drop lines that are mostly Chinese. When the user has the translate button on,
+ * Read Frog injects Chinese translation nodes into the page, so innerText becomes
+ * bilingual — we only want the original English JD.
+ * Skipped entirely if the page has little English (a genuinely Chinese JD).
+ */
+function stripInjectedTranslations(text: string): string {
+  const latinTotal = text.match(/[a-z]/gi)?.length ?? 0
+  if (latinTotal < 200) {
+    return text
+  }
+  return text
+    .split("\n")
+    .filter((line) => {
+      const cjk = line.match(/[一-鿿]/g)?.length ?? 0
+      const latin = line.match(/[a-z]/gi)?.length ?? 0
+      return !(cjk > 3 && cjk >= latin)
+    })
+    .join("\n")
+}
 
 function clean(text: string): string {
-  return text
+  return stripInjectedTranslations(text)
     .replace(/[ \t]{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim()
