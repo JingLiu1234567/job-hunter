@@ -20,7 +20,10 @@ export interface RequirementMatch {
 }
 
 export interface MatchResult {
+  /** 仅含硬性、可核实的要求（参与评分） */
   requirements: RequirementMatch[]
+  /** 软性、不可核实的要求（仅展示，不计入评分） */
+  softRequirements: string[]
   /** 由规则算出：🟢 recommend / 🟡 maybe / 🔴 skip */
   verdict: Verdict
   /** 一句话建议（投不投 + 为什么），由清单规则生成，保证与逐条结果一致 */
@@ -52,6 +55,11 @@ const EXTRACT_SYSTEM = `你是招聘要求分析专家。请从职位描述(JD)�
 - **只提取"候选人需要具备的资格"**：学历、年限、技能、工具、经验、证书、语言等。
 - **绝不要**把 "Responsibilities / 工作职责 / 你将要做什么(will / responsible for / 动词开头的职责句)" 当成要求——那是岗位职责，不是对候选人的资格，一律忽略。
 - 只有当 JD 完全没有任何资格段落时，才从全文推断候选人必须具备的硬性条件。
+- 如果 JD 没有 Preferred / 加分 段落，就**不要硬造 nice**；**忽略** LinkedIn 自动生成的 "Desired Skills and Experience" 之类的关键词标签，那不是真正的加分段落。
+
+另外，**每一条（无论 must 还是 nice）都要标 soft（true / false）**——区分"可核实的硬条件"和"无法核实的软素质"。判据：**这条能不能在简历里用具体证据核实？**
+- soft=false（硬，可核实）：具体技能/工具/技术（SQL、Python、Azure）、年限、学历专业、特定领域经验、特定方法论、证书、语言。
+- soft=true（软，简历几乎无法证明）：诚实、细心/注意细节、独立工作、责任心、抗压、遵循指南、是否使用某类工具（如"不使用AI写作工具"）、泛泛的"沟通能力/分析能力/批判性思维"等通用素质或态度。
 
 铁律：
 1. 忠实保留具体信息——年限（如"3年以上"）、学历及专业、技术/工具/证书/语言名。**禁止**概括成"具有X方面的扎实背景"。
@@ -59,7 +67,7 @@ const EXTRACT_SYSTEM = `你是招聘要求分析专家。请从职位描述(JD)�
 3. 资格段落里每一条都要在，别漏。
 
 只看 JD，不分析候选人。每条用简洁中文。只输出 JSON，不要多余文字、不要代码块：
-{"requirements":[{"text":"要求点","type":"must"或"nice"}]}`
+{"requirements":[{"text":"要求点","type":"must"或"nice","soft":true或false}]}`
 
 // ---- Step 2: 拿要求逐条比简历，严格诚实，不许抬分 ----
 const MATCH_SYSTEM = `你是严格、诚实的求职匹配助手，绝不为了讨好用户而抬高匹配度。
@@ -178,24 +186,44 @@ export async function analyzeMatch(resume: string, jd: string): Promise<MatchRes
     throw new Error("没找到已填 API Key 的大模型(LLM)。请在插件设置里给 DeepSeek 填好 API Key 并启用")
   }
 
-  // Step 1：抽取 JD 要求（只看 JD）
+  // Step 1：抽取 JD 要求 + 标注 soft/hard（只看 JD）
   const extractRaw = await callLLM(providerId, EXTRACT_SYSTEM, `【职位描述 JD】\n${jd}`)
   const { requirements: rawReqs = [] } = JSON.parse(extractJson(extractRaw)) as {
-    requirements?: { text?: string, type?: string }[]
+    requirements?: { text?: string, type?: string, soft?: boolean }[]
   }
-  const requirements = rawReqs
+  const allReqs = rawReqs
     .filter(r => r.text)
-    .map(r => ({ text: r.text as string, type: (r.type === "nice" ? "nice" : "must") as ReqType }))
-  if (requirements.length === 0) {
+    .map(r => ({
+      text: r.text as string,
+      type: (r.type === "nice" ? "nice" : "must") as ReqType,
+      soft: r.soft === true,
+    }))
+  if (allReqs.length === 0) {
     const preview = jd.replace(/\s+/g, " ").slice(0, 80)
     throw new Error(`没能解析出职位要求（抓到正文约 ${jd.length} 字，开头：「${preview}…」）。确认在职位详情页再试`)
   }
 
-  // Step 2：逐条比对简历
+  // 只对"硬性、可核实"的要求评分；软性的单独展示、不计分
+  const hardReqs = allReqs.filter(r => !r.soft)
+  const softRequirements = allReqs.filter(r => r.soft).map(r => r.text)
+  const flexible = jdIsFlexible(jd)
+
+  // 去掉软性后几乎没有硬性要求（如纯软素质的众包帖）：不强判，给中性提示
+  if (hardReqs.length === 0) {
+    return {
+      requirements: [],
+      softRequirements,
+      verdict: "maybe",
+      recommendation: "该职位没有可量化的硬性要求，主要看软素质与态度，请结合自身情况判断",
+      flexible,
+    }
+  }
+
+  // Step 2：逐条比对简历（只比硬性要求）
   const matchRaw = await callLLM(
     providerId,
     MATCH_SYSTEM,
-    `【候选人简历】\n${resume}\n\n【职位要求】\n${JSON.stringify(requirements, null, 2)}`,
+    `【候选人简历】\n${resume}\n\n【职位要求】\n${JSON.stringify(hardReqs.map(({ text, type }) => ({ text, type })), null, 2)}`,
   )
   const { matches: rawMatches = [] } = JSON.parse(extractJson(matchRaw)) as {
     matches?: { text?: string, type?: string, met?: string, note?: string }[]
@@ -218,5 +246,5 @@ export async function analyzeMatch(resume: string, jd: string): Promise<MatchRes
   matched.sort((a, b) => (a.type === b.type ? 0 : a.type === "must" ? -1 : 1))
 
   const { verdict, recommendation } = decide(matched)
-  return { requirements: matched, verdict, recommendation, flexible: jdIsFlexible(jd) }
+  return { requirements: matched, softRequirements, verdict, recommendation, flexible }
 }
