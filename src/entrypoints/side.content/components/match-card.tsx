@@ -56,10 +56,12 @@ function ResultView({ result }: { result: MatchResult }) {
         <span className={`rounded-full px-2.5 py-0.5 text-sm font-semibold ${meta.badge}`}>
           {meta.emoji} {meta.label}
         </span>
-        <span className="ml-auto text-xs text-neutral-500">
-          必须 {mustMet}/{musts.length}
-          {nices.length > 0 && ` · 加分 ${niceMet}/${nices.length}`}
-        </span>
+        {result.requirements.length > 0 && (
+          <span className="ml-auto text-xs text-neutral-500">
+            {musts.length > 0 && `必须 ${mustMet}/${musts.length}`}
+            {nices.length > 0 && `${musts.length > 0 ? " · " : ""}加分 ${niceMet}/${nices.length}`}
+          </span>
+        )}
       </div>
 
       <p className="rounded-md bg-neutral-100 p-2 text-[13px] leading-relaxed dark:bg-neutral-800">
@@ -73,17 +75,35 @@ function ResultView({ result }: { result: MatchResult }) {
       )}
 
       <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto">
-        <span className="text-xs font-semibold text-neutral-500">必须要求</span>
-        {musts.map(req => (
-          <RequirementRow key={`must-${req.text}`} req={req} />
-        ))}
+        {musts.length > 0 && (
+          <>
+            <span className="text-xs font-semibold text-neutral-500">必须要求</span>
+            {musts.map(req => (
+              <RequirementRow key={`must-${req.text}`} req={req} />
+            ))}
+          </>
+        )}
 
         {nices.length > 0 && (
           <>
-            <div className="my-1.5 border-t border-neutral-200 dark:border-neutral-700" />
+            {musts.length > 0 && <div className="my-1.5 border-t border-neutral-200 dark:border-neutral-700" />}
             <span className="text-xs font-semibold text-neutral-500">加分项</span>
             {nices.map(req => (
               <RequirementRow key={`nice-${req.text}`} req={req} />
+            ))}
+          </>
+        )}
+
+        {result.softRequirements.length > 0 && (
+          <>
+            <div className="my-1.5 border-t border-dashed border-neutral-300 dark:border-neutral-700" />
+            <span className="text-xs font-semibold text-neutral-400">软性要求（招聘方提到，未计入评分）</span>
+            {result.softRequirements.map(text => (
+              <div key={`soft-${text}`} className="text-[12px] leading-snug text-neutral-400">
+                ·
+                {" "}
+                {text}
+              </div>
             ))}
           </>
         )}
