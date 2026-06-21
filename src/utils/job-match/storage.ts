@@ -17,3 +17,21 @@ export async function setResume(text: string): Promise<void> {
 export function watchResume(callback: (text: string) => void): () => void {
   return storage.watch<string>(RESUME_KEY, newValue => callback(newValue ?? ""))
 }
+
+// Remembered position/size of the match card, so it stays put across page reloads.
+const CARD_LAYOUT_KEY = "local:jobhunter_card_layout"
+
+export interface CardLayout {
+  x?: number
+  y?: number
+  w?: number
+  h?: number
+}
+
+export async function getCardLayout(): Promise<CardLayout> {
+  return (await storage.getItem<CardLayout>(CARD_LAYOUT_KEY)) ?? {}
+}
+
+export async function setCardLayout(layout: CardLayout): Promise<void> {
+  await storage.setItem(CARD_LAYOUT_KEY, layout)
+}
