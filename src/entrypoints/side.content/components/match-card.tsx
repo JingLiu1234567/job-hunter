@@ -1,7 +1,8 @@
 import type { MatchResult, RequirementMatch, Verdict } from "@/utils/job-match/analyze"
 import { IconCheck, IconLoader2, IconMinus, IconX } from "@tabler/icons-react"
 import { useAtom } from "jotai"
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { getCardLayout, setCardLayout } from "@/utils/job-match/storage"
 import { cn } from "@/utils/styles/utils"
 import { matchStateAtom } from "../atoms"
 
@@ -76,7 +77,7 @@ function ResultView({ result }: { result: MatchResult }) {
         </p>
       )}
 
-      <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto">
+      <div className="flex flex-col gap-1.5">
         {musts.length > 0 && (
           <>
             <span className="text-xs font-semibold text-neutral-500">必须要求</span>
@@ -118,19 +119,38 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))
 }
 
-/** 页面上的匹配判断卡，顶部标题栏可拖动；默认在顶部居中。 */
+const MIN_W = 260
+const MIN_H = 160
+
+/** 页面上的匹配判断卡：标题栏可拖动、右下角可缩放、布局记忆到本地；默认右上角。 */
 export default function MatchCard() {
   const [state, setState] = useAtom(matchStateAtom)
-  // null = 未拖动过（用居中样式）；否则用绝对像素坐标
+  // null = 未拖动过（用右上角默认样式）；否则用绝对像素坐标
   const [pos, setPos] = useState<{ x: number, y: number } | null>(null)
+  const [size, setSize] = useState<{ w: number, h: number } | null>(null)
   const cardRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ startX: number, startY: number, originX: number, originY: number } | null>(null)
+  const resizeRef = useRef<{ startX: number, startY: number, originW: number, originH: number } | null>(null)
+  const layoutRef = useRef<{ x?: number, y?: number, w?: number, h?: number }>({})
+
+  // 加载记忆的位置/大小
+  useEffect(() => {
+    void getCardLayout().then((layout) => {
+      layoutRef.current = layout
+      if (layout.x != null && layout.y != null)
+        setPos({ x: layout.x, y: layout.y })
+      if (layout.w != null && layout.h != null)
+        setSize({ w: layout.w, h: layout.h })
+    })
+  }, [])
 
   if (state.status === "idle")
     return null
 
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    // 点关闭按钮时不触发拖动
+  const saveLayout = () => void setCardLayout(layoutRef.current)
+
+  // ---- 拖动（标题栏）----
+  const onDragStart = (e: React.PointerEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest("button"))
       return
     const rect = cardRef.current?.getBoundingClientRect()
@@ -140,41 +160,78 @@ export default function MatchCard() {
     e.currentTarget.setPointerCapture(e.pointerId)
     e.preventDefault()
   }
-
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+  const onDragMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current
     if (!drag)
       return
     const rect = cardRef.current?.getBoundingClientRect()
     const w = rect?.width ?? 320
     const h = rect?.height ?? 80
-    setPos({
+    const next = {
       x: clamp(drag.originX + (e.clientX - drag.startX), 0, window.innerWidth - w),
       y: clamp(drag.originY + (e.clientY - drag.startY), 0, window.innerHeight - h),
-    })
+    }
+    setPos(next)
+    layoutRef.current = { ...layoutRef.current, ...next }
   }
-
-  const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+  const onDragEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current)
+      return
     dragRef.current = null
     if (e.currentTarget.hasPointerCapture?.(e.pointerId))
       e.currentTarget.releasePointerCapture(e.pointerId)
+    saveLayout()
+  }
+
+  // ---- 缩放（右下角）----
+  const onResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    const rect = cardRef.current?.getBoundingClientRect()
+    if (!rect)
+      return
+    resizeRef.current = { startX: e.clientX, startY: e.clientY, originW: rect.width, originH: rect.height }
+    e.currentTarget.setPointerCapture(e.pointerId)
+    e.preventDefault()
+    e.stopPropagation()
+  }
+  const onResizeMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const rs = resizeRef.current
+    if (!rs)
+      return
+    const next = {
+      w: clamp(rs.originW + (e.clientX - rs.startX), MIN_W, window.innerWidth - 16),
+      h: clamp(rs.originH + (e.clientY - rs.startY), MIN_H, window.innerHeight - 16),
+    }
+    setSize(next)
+    layoutRef.current = { ...layoutRef.current, ...next }
+  }
+  const onResizeEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!resizeRef.current)
+      return
+    resizeRef.current = null
+    if (e.currentTarget.hasPointerCapture?.(e.pointerId))
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    saveLayout()
   }
 
   return (
     <div
       ref={cardRef}
       className={cn(
-        "fixed z-[2147483647] w-[320px] rounded-xl border border-neutral-200 bg-white p-4 text-neutral-800 shadow-2xl dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100",
-        pos ? "" : "left-1/2 top-6 -translate-x-1/2",
+        "fixed z-[2147483647] flex flex-col rounded-xl border border-neutral-200 bg-white p-4 text-neutral-800 shadow-2xl dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100",
+        pos ? "" : "right-4 top-6",
       )}
-      style={pos ? { left: `${pos.x}px`, top: `${pos.y}px` } : undefined}
+      style={{
+        width: size?.w ?? 320,
+        height: size?.h,
+        ...(pos ? { left: `${pos.x}px`, top: `${pos.y}px` } : {}),
+      }}
     >
       <div
-        className="mb-2 flex cursor-move touch-none items-center justify-between select-none"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
+        className="mb-2 flex flex-none cursor-move touch-none items-center justify-between select-none"
+        onPointerDown={onDragStart}
+        onPointerMove={onDragMove}
+        onPointerUp={onDragEnd}
+        onPointerCancel={onDragEnd}
       >
         <span className="text-sm font-semibold">职位匹配度</span>
         <button
@@ -187,20 +244,35 @@ export default function MatchCard() {
         </button>
       </div>
 
-      {state.status === "loading" && (
-        <div className="flex items-center gap-2 py-2 text-sm text-neutral-500">
-          <IconLoader2 className="h-4 w-4 animate-spin" />
-          正在读取职位要求并比对你的简历…
-        </div>
-      )}
+      <div className={cn("min-h-0 flex-1", size ? "overflow-y-auto" : "max-h-[70vh] overflow-y-auto")}>
+        {state.status === "loading" && (
+          <div className="flex items-center gap-2 py-2 text-sm text-neutral-500">
+            <IconLoader2 className="h-4 w-4 animate-spin" />
+            正在读取职位要求并比对你的简历…
+          </div>
+        )}
 
-      {state.status === "error" && (
-        <p className="py-1 text-[13px] leading-relaxed text-red-600 dark:text-red-400">
-          {state.message}
-        </p>
-      )}
+        {state.status === "error" && (
+          <p className="py-1 text-[13px] leading-relaxed text-red-600 dark:text-red-400">
+            {state.message}
+          </p>
+        )}
 
-      {state.status === "done" && <ResultView result={state.result} />}
+        {state.status === "done" && <ResultView result={state.result} />}
+      </div>
+
+      {/* 右下角缩放手柄 */}
+      <div
+        className="absolute right-0.5 bottom-0.5 h-3.5 w-3.5 cursor-se-resize touch-none"
+        onPointerDown={onResizeStart}
+        onPointerMove={onResizeMove}
+        onPointerUp={onResizeEnd}
+        onPointerCancel={onResizeEnd}
+      >
+        <svg viewBox="0 0 10 10" className="h-full w-full text-neutral-400">
+          <path d="M9 1 L1 9 M9 5 L5 9" stroke="currentColor" strokeWidth="1" fill="none" />
+        </svg>
+      </div>
     </div>
   )
 }
