@@ -1,6 +1,8 @@
 import type { MatchResult, RequirementMatch, Verdict } from "@/utils/job-match/analyze"
 import { IconCheck, IconLoader2, IconMinus, IconX } from "@tabler/icons-react"
 import { useAtom } from "jotai"
+import { useRef, useState } from "react"
+import { cn } from "@/utils/styles/utils"
 import { matchStateAtom } from "../atoms"
 
 const VERDICT_META: Record<Verdict, { emoji: string, label: string, badge: string }> = {
@@ -112,16 +114,68 @@ function ResultView({ result }: { result: MatchResult }) {
   )
 }
 
-/** 页面上的匹配判断卡，固定在顶部居中。 */
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value))
+}
+
+/** 页面上的匹配判断卡，顶部标题栏可拖动；默认在顶部居中。 */
 export default function MatchCard() {
   const [state, setState] = useAtom(matchStateAtom)
+  // null = 未拖动过（用居中样式）；否则用绝对像素坐标
+  const [pos, setPos] = useState<{ x: number, y: number } | null>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef<{ startX: number, startY: number, originX: number, originY: number } | null>(null)
 
   if (state.status === "idle")
     return null
 
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // 点关闭按钮时不触发拖动
+    if ((e.target as HTMLElement).closest("button"))
+      return
+    const rect = cardRef.current?.getBoundingClientRect()
+    if (!rect)
+      return
+    dragRef.current = { startX: e.clientX, startY: e.clientY, originX: rect.left, originY: rect.top }
+    e.currentTarget.setPointerCapture(e.pointerId)
+    e.preventDefault()
+  }
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current
+    if (!drag)
+      return
+    const rect = cardRef.current?.getBoundingClientRect()
+    const w = rect?.width ?? 320
+    const h = rect?.height ?? 80
+    setPos({
+      x: clamp(drag.originX + (e.clientX - drag.startX), 0, window.innerWidth - w),
+      y: clamp(drag.originY + (e.clientY - drag.startY), 0, window.innerHeight - h),
+    })
+  }
+
+  const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    dragRef.current = null
+    if (e.currentTarget.hasPointerCapture?.(e.pointerId))
+      e.currentTarget.releasePointerCapture(e.pointerId)
+  }
+
   return (
-    <div className="fixed left-1/2 top-6 z-[2147483647] w-[320px] -translate-x-1/2 rounded-xl border border-neutral-200 bg-white p-4 text-neutral-800 shadow-2xl dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100">
-      <div className="mb-2 flex items-center justify-between">
+    <div
+      ref={cardRef}
+      className={cn(
+        "fixed z-[2147483647] w-[320px] rounded-xl border border-neutral-200 bg-white p-4 text-neutral-800 shadow-2xl dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100",
+        pos ? "" : "left-1/2 top-6 -translate-x-1/2",
+      )}
+      style={pos ? { left: `${pos.x}px`, top: `${pos.y}px` } : undefined}
+    >
+      <div
+        className="mb-2 flex cursor-move touch-none items-center justify-between select-none"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+      >
         <span className="text-sm font-semibold">职位匹配度</span>
         <button
           type="button"
