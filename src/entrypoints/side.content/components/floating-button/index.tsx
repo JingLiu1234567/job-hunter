@@ -394,7 +394,7 @@ export default function FloatingButton() {
             src={readFrogLogoUrl}
             alt={APP_NAME}
             className={cn(
-              "h-8 w-8 rounded-full",
+              "h-8 w-8",
               !isDraggingButton && (floatingButtonSide === "right" ? "ml-1" : "mr-1"),
             )}
           />
