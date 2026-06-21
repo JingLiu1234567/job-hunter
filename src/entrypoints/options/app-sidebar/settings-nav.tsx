@@ -23,7 +23,6 @@ const OVERLAY_TOOLS_PATHS = ["/floating-button", "/selection-toolbar", "/context
 export function SettingsNav() {
   const { pathname } = useLocation()
   const isOverlayToolsActive = OVERLAY_TOOLS_PATHS.includes(pathname)
-  const isFirefox = import.meta.env.BROWSER === "firefox"
 
   return (
     <SidebarGroup>
@@ -45,30 +44,9 @@ export function SettingsNav() {
           </SidebarMenuItem>
 
           <SidebarMenuItem>
-            <SidebarMenuButton render={<Link to="/custom-actions" />} isActive={pathname === "/custom-actions"}>
-              <Icon icon="tabler:sparkles" />
-              <span>{i18n.t("options.floatingButtonAndToolbar.selectionToolbar.customActions.title")}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-
-          <SidebarMenuItem>
             <SidebarMenuButton render={<Link to="/translation" />} isActive={pathname === "/translation"}>
               <Icon icon="ri:translate" />
               <span>{i18n.t("options.translation.title")}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-
-          <SidebarMenuItem>
-            <SidebarMenuButton render={<Link to="/video-subtitles" />} isActive={pathname === "/video-subtitles"}>
-              <Icon icon="tabler:subtitles" />
-              <span>{i18n.t("options.videoSubtitles.title")}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-
-          <SidebarMenuItem>
-            <SidebarMenuButton render={<Link to="/input-translation" />} isActive={pathname === "/input-translation"}>
-              <Icon icon="tabler:keyboard" />
-              <span>{i18n.t("options.overlayTools.inputTranslation.title")}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
 
@@ -103,22 +81,6 @@ export function SettingsNav() {
               </CollapsibleContent>
             </SidebarMenuItem>
           </Collapsible>
-
-          {!isFirefox && (
-            <SidebarMenuItem>
-              <SidebarMenuButton render={<Link to="/tts" />} isActive={pathname === "/tts"}>
-                <Icon icon="tabler:speakerphone" />
-                <span>{i18n.t("options.tts.title")}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )}
-
-          <SidebarMenuItem>
-            <SidebarMenuButton render={<Link to="/statistics" />} isActive={pathname === "/statistics"}>
-              <Icon icon="tabler:chart-dots" />
-              <span>{i18n.t("options.statistics.title")}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
 
           <SidebarMenuItem>
             <SidebarMenuButton render={<Link to="/config" />} isActive={pathname === "/config"}>
