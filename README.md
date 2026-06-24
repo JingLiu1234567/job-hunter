@@ -1,31 +1,57 @@
-# 找工作神器 Job Hunter
+# 找工作神器 · Job Hunter
 
-一个帮你找工作的浏览器插件。
+A browser extension that helps you read **and judge** English job posts.
+On any job page it gives you **inline bilingual translation** plus an **honest, requirement-by-requirement match score** against your own résumé — so you can decide *"is this worth applying to?"* in seconds.
 
-打开英文招聘页面（LinkedIn、公司官网的 JD 等），一键**网页双语翻译**——原文下方紧跟中文译文，绿色高亮、清晰好读。在此基础上，逐步加入面向求职者的 AI 功能（职位要求提取、简历匹配、行业黑话解释等）。
+Built for non-native speakers job-hunting abroad. Forked from the open-source [Read Frog](https://github.com/mengxi-ream/read-frog) and extended with an original job-matching feature.
 
-## 当前功能
-- 🟢 **整页双语翻译**：英文原文 + 中文译文对照，支持 LinkedIn 等动态网页
-- 🤖 **自带 LLM 翻译**：可接入 DeepSeek 等多家模型，用自己的 API Key
+<p align="center">
+  <img src="docs/match-en.png" width="80%" alt="Job match card — honest, requirement-by-requirement verdict" />
+</p>
 
-## 规划中（找工作助手方向）
-- 📋 一键分析 JD：提取核心硬要求、标出红旗与亮点
-- 📊 简历匹配度打分
-- 💬 划词解释外企术语 / 行业黑话
+<p align="center">
+  <img src="docs/match-zh.png" width="49%" alt="Bilingual translation + match card (Chinese UI)" />
+  <img src="docs/popup.png" width="49%" alt="Popup — paste or upload your résumé" />
+</p>
 
-## 本地开发
+## Why
+
+Tools like LinkedIn Premium or Jobscan tend to **inflate** your fit — a few overlapping skill tags and you're a "medium match", so you waste time applying to roles you don't qualify for. This extension does the opposite: it reads the **actual requirements** and tells you, honestly, when to **skip**.
+
+## Features
+
+- 🟢 **Honest match scoring** — extracts the job's real requirements, checks each against your résumé, and gives a 🟢/🟡/🔴 verdict driven by the **must-have** requirements (not vanity metrics).
+- 🔤 **Inline bilingual translation** — original + translation, paragraph by paragraph; handles dynamic pages like LinkedIn (inherited from Read Frog).
+- 📄 **Résumé from paste or file** — paste text, or upload **PDF / Word / .txt** (parsed locally).
+- 🌍 **Follows your browser language** — UI *and* the analysis output are in English / 中文 / 日本語 automatically.
+- 🔒 **Your keys, your data** — bring your own LLM key (DeepSeek, OpenRouter/Claude, …); résumé stays in local storage.
+
+## How the matching works
+
+The score is **not** keyword overlap (ATS-style). It's a two-step LLM pipeline designed to be faithful and hard to fool:
+
+1. **Extract requirements (JD only)** — the model reads only the job post and lists each qualification *faithfully* (keeps "3+ years", degree + field, specific tools), tagging each as **must / nice** and **hard (verifiable) / soft (e.g. "attention to detail")**. Doing this without the résumé in context avoids cherry-picking requirements the résumé happens to match.
+2. **Match against the résumé** — each **hard** requirement is judged `yes / no / unclear` against the full résumé, conservatively (no evidence → not a yes). Soft, unverifiable traits are shown but **never scored**.
+3. **Verdict by rule** — must-dominant: all musts met → 🟢; ≤ half → 🔴; in between, strong nice-to-haves can lift it to 🟢. The colour comes from a transparent rule over the checklist, so *"why this verdict"* is always explainable.
+
+## Tech stack
+
+WXT · React · TypeScript · Vercel AI SDK (20+ LLM providers) · Tailwind · pdfjs-dist & mammoth (résumé parsing) · `@wxt-dev/i18n`.
+
+## Local development
+
 ```bash
 pnpm install
-pnpm dev          # 开发模式（热重载）
-pnpm build        # 构建生产版本到 .output/chrome-mv3
+pnpm dev          # dev with hot reload
+pnpm build        # production build → .output/chrome-mv3
 ```
-> Windows 上若 `pnpm install` 的 postinstall 步骤报错，单独运行：
+> On Windows, if `pnpm install`'s postinstall step errors, run it manually:
 > `$env:WXT_SKIP_ENV_VALIDATION="true"; pnpm exec wxt prepare`
 
-构建后在浏览器 `edge://extensions` 或 `chrome://extensions` 打开开发者模式，「加载解压缩的扩展」选择 `.output/chrome-mv3` 文件夹即可。
+Then load `.output/chrome-mv3` as an unpacked extension (`chrome://extensions` or `edge://extensions` → Developer mode → Load unpacked).
 
-## 致谢与许可
+## Credits & license
 
-本项目基于优秀的开源项目 **[Read Frog（陪读蛙）](https://github.com/mengxi-ream/read-frog)** 改造而来，翻译引擎、动态网页处理等核心能力归功于原项目及其贡献者。原始说明见 [README.read-frog.md](./README.read-frog.md)。
+Based on the excellent open-source **[Read Frog（陪读蛙）](https://github.com/mengxi-ream/read-frog)** — its translation engine, dynamic-page handling, and provider infrastructure are the work of the original project and its contributors. Original readme preserved as [README.read-frog.md](./README.read-frog.md).
 
-遵循 **GPL-3.0** 许可证（与上游一致），详见 [LICENSE](./LICENSE)。
+Licensed under **GPL-3.0**, same as upstream. See [LICENSE](./LICENSE).
