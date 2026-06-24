@@ -1,6 +1,5 @@
 import type { FloatingButtonSide } from "@/types/config/floating-button"
-import { RiTranslate } from "@remixicon/react"
-import { IconCheck } from "@tabler/icons-react"
+import { IconCheck, IconWorld } from "@tabler/icons-react"
 import { useAtomValue } from "jotai"
 import { sendMessage } from "@/utils/message"
 import { cn } from "@/utils/styles/utils"
@@ -21,7 +20,7 @@ export default function TranslateButton({
 
   return (
     <HiddenButton
-      icon={<RiTranslate className="h-5 w-5" />}
+      icon={<IconWorld className="h-5 w-5" />}
       className={className}
       side={side}
       expanded={expanded}
