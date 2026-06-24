@@ -6,12 +6,12 @@ On any job page it gives you **inline bilingual translation** plus an **honest, 
 Built for non-native speakers job-hunting abroad. Forked from the open-source [Read Frog](https://github.com/mengxi-ream/read-frog) and extended with an original job-matching feature.
 
 <p align="center">
-  <img src="docs/match-en.png" width="80%" alt="Job match card — honest, requirement-by-requirement verdict" />
+  <img src="screenshots/match-en.png" width="80%" alt="Job match card — honest, requirement-by-requirement verdict" />
 </p>
 
 <p align="center">
-  <img src="docs/match-zh.png" width="49%" alt="Bilingual translation + match card (Chinese UI)" />
-  <img src="docs/popup.png" width="49%" alt="Popup — paste or upload your résumé" />
+  <img src="screenshots/match-zh.png" width="49%" alt="Bilingual translation + match card (Chinese UI)" />
+  <img src="screenshots/popup.png" width="49%" alt="Popup — paste or upload your résumé" />
 </p>
 
 ## Why
