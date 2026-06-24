@@ -1180,6 +1180,10 @@ jobMatch:
     placeholder: 履歴書をここに貼り付けてください。ローカルに保存され、求人マッチングに使われます…
     charUnit: 文字
     empty: 履歴書が未入力です
+    upload: アップロード
+    parsing: ファイルを読み込み中…
+    unsupported: PDF・Word(.docx)・.txt のみ対応しています
+    parseFailed: ファイルを読み取れませんでした。テキストを貼り付けてください
   card:
     title: 求人マッチ度
     close: 閉じる

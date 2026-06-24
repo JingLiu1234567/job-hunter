@@ -1295,6 +1295,10 @@ jobMatch:
     placeholder: 把简历内容粘贴到这里，保存后用于职位匹配分析…
     charUnit: 字
     empty: 尚未填写简历
+    upload: 上传
+    parsing: 正在读取文件…
+    unsupported: 仅支持 PDF、Word(.docx) 或 .txt 文件
+    parseFailed: 文件读取失败，可改为直接粘贴文字
   card:
     title: 职位匹配度
     close: 关闭
