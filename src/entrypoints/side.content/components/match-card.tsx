@@ -2,24 +2,28 @@ import type { MatchResult, RequirementMatch, Verdict } from "@/utils/job-match/a
 import { IconCheck, IconLoader2, IconMinus, IconX } from "@tabler/icons-react"
 import { useAtom } from "jotai"
 import { useEffect, useRef, useState } from "react"
+import { i18n } from "#imports"
 import { getCardLayout, setCardLayout } from "@/utils/job-match/storage"
 import { cn } from "@/utils/styles/utils"
 import { matchStateAtom } from "../atoms"
 
-const VERDICT_META: Record<Verdict, { emoji: string, label: string, badge: string }> = {
+const VERDICT_LABEL_KEY = {
+  recommend: "jobMatch.verdict.recommend",
+  maybe: "jobMatch.verdict.maybe",
+  skip: "jobMatch.verdict.skip",
+} as const
+
+const VERDICT_META: Record<Verdict, { emoji: string, badge: string }> = {
   recommend: {
     emoji: "🟢",
-    label: "值得投",
     badge: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
   },
   maybe: {
     emoji: "🟡",
-    label: "可考虑",
     badge: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
   },
   skip: {
     emoji: "🔴",
-    label: "不建议投",
     badge: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
   },
 }
@@ -57,12 +61,14 @@ function ResultView({ result }: { result: MatchResult }) {
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <span className={`rounded-full px-2.5 py-0.5 text-sm font-semibold ${meta.badge}`}>
-          {meta.emoji} {meta.label}
+          {meta.emoji}
+          {" "}
+          {i18n.t(VERDICT_LABEL_KEY[result.verdict])}
         </span>
         {result.requirements.length > 0 && (
           <span className="ml-auto text-xs text-neutral-500">
-            {musts.length > 0 && `必须 ${mustMet}/${musts.length}`}
-            {nices.length > 0 && `${musts.length > 0 ? " · " : ""}加分 ${niceMet}/${nices.length}`}
+            {musts.length > 0 && `${i18n.t("jobMatch.card.required")} ${mustMet}/${musts.length}`}
+            {nices.length > 0 && `${musts.length > 0 ? " · " : ""}${i18n.t("jobMatch.card.preferred")} ${niceMet}/${nices.length}`}
           </span>
         )}
       </div>
@@ -73,14 +79,14 @@ function ResultView({ result }: { result: MatchResult }) {
 
       {result.flexible && (
         <p className="rounded-md border border-red-400 bg-red-50 p-2 text-[13px] font-semibold leading-relaxed text-red-600 dark:border-red-700 dark:bg-red-950 dark:text-red-400">
-          ✱ 招聘方说明：不必满足全部要求，方向契合也欢迎投递
+          {i18n.t("jobMatch.card.flexibleNote")}
         </p>
       )}
 
       <div className="flex flex-col gap-1.5">
         {musts.length > 0 && (
           <>
-            <span className="text-xs font-semibold text-neutral-500">必须要求</span>
+            <span className="text-xs font-semibold text-neutral-500">{i18n.t("jobMatch.card.requiredSection")}</span>
             {musts.map(req => (
               <RequirementRow key={`must-${req.text}`} req={req} />
             ))}
@@ -90,7 +96,7 @@ function ResultView({ result }: { result: MatchResult }) {
         {nices.length > 0 && (
           <>
             {musts.length > 0 && <div className="my-1.5 border-t border-neutral-200 dark:border-neutral-700" />}
-            <span className="text-xs font-semibold text-neutral-500">加分项</span>
+            <span className="text-xs font-semibold text-neutral-500">{i18n.t("jobMatch.card.preferredSection")}</span>
             {nices.map(req => (
               <RequirementRow key={`nice-${req.text}`} req={req} />
             ))}
@@ -100,7 +106,7 @@ function ResultView({ result }: { result: MatchResult }) {
         {result.softRequirements.length > 0 && (
           <>
             <div className="my-1.5 border-t border-dashed border-neutral-300 dark:border-neutral-700" />
-            <span className="text-xs font-semibold text-neutral-400">软性要求（招聘方提到，未计入评分）</span>
+            <span className="text-xs font-semibold text-neutral-400">{i18n.t("jobMatch.card.softSection")}</span>
             {result.softRequirements.map(text => (
               <div key={`soft-${text}`} className="text-[12px] leading-snug text-neutral-400">
                 ·
@@ -233,10 +239,10 @@ export default function MatchCard() {
         onPointerUp={onDragEnd}
         onPointerCancel={onDragEnd}
       >
-        <span className="text-sm font-semibold">职位匹配度</span>
+        <span className="text-sm font-semibold">{i18n.t("jobMatch.card.title")}</span>
         <button
           type="button"
-          aria-label="关闭"
+          aria-label={i18n.t("jobMatch.card.close")}
           className="cursor-pointer text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
           onClick={() => setState({ status: "idle" })}
         >
@@ -248,7 +254,7 @@ export default function MatchCard() {
         {state.status === "loading" && (
           <div className="flex items-center gap-2 py-2 text-sm text-neutral-500">
             <IconLoader2 className="h-4 w-4 animate-spin" />
-            正在读取职位要求并比对你的简历…
+            {i18n.t("jobMatch.card.loading")}
           </div>
         )}
 
