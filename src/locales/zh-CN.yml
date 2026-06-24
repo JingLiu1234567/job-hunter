@@ -1286,3 +1286,40 @@ languages:
   wls: 瓦利斯语
   rar: 拉罗汤加语
   hif: 斐济印地语
+
+jobMatch:
+  resume:
+    title: 我的简历
+    save: 保存
+    saved: 已保存 ✓
+    placeholder: 把简历内容粘贴到这里，保存后用于职位匹配分析…
+    charUnit: 字
+    empty: 尚未填写简历
+  card:
+    title: 职位匹配度
+    close: 关闭
+    loading: 正在读取职位要求并比对你的简历…
+    required: 必须
+    preferred: 加分
+    requiredSection: 必须要求
+    preferredSection: 加分项
+    softSection: 软性要求（招聘方提到，未计入评分）
+    flexibleNote: "✱ 招聘方说明：不必满足全部要求，方向契合也欢迎投递"
+    emptyResult: 匹配结果为空，请重试（模型可能未正确返回）
+    invalidJson: 模型未返回有效的 JSON
+  verdict:
+    recommend: 值得投
+    maybe: 可考虑
+    skip: 不建议投
+  rec:
+    recommendAll: "值得投：硬性要求全部满足（$1/$2）"
+    recommendSome: "值得投：硬性要求满足 $1/$2，加分项满足度高，仅差 $3"
+    maybe: "可以考虑：硬性要求满足 $1/$2，欠缺 $3，投前最好补强"
+    skip: "不建议投：硬性要求只满足 $1/$2，差距较大"
+    noHard: 该职位没有可量化的硬性要求，主要看软素质与态度，请结合自身情况判断
+  error:
+    noResume: 还没保存简历，请先在插件下拉框里粘贴并保存简历
+    noJd: 没抓到职位描述，请打开一个职位详情页再试
+    noConfig: 插件配置未找到，请先在设置里配置 LLM 服务商
+    noLlm: 没找到已填 API Key 的大模型(LLM)。请在插件设置里给 DeepSeek/OpenRouter 等填好 API Key 并启用
+    noReqs: "没能解析出职位要求（抓到正文约 $1 字，开头：$2…）。确认在职位详情页再试"

@@ -1286,3 +1286,40 @@ languages:
   wls: Wallisian
   rar: Rarotongan
   hif: Fiji Hindi
+
+jobMatch:
+  resume:
+    title: My Resume
+    save: Save
+    saved: Saved ✓
+    placeholder: Paste your resume here — saved locally and used for job matching…
+    charUnit: chars
+    empty: No resume yet
+  card:
+    title: Job Match
+    close: Close
+    loading: Reading the job requirements and matching your resume…
+    required: Required
+    preferred: Preferred
+    requiredSection: Required
+    preferredSection: Preferred
+    softSection: Soft skills (mentioned, not scored)
+    flexibleNote: "✱ The employer says you don't need to meet every requirement — apply if you're a good fit"
+    emptyResult: Empty result, please try again
+    invalidJson: The model did not return valid JSON
+  verdict:
+    recommend: Worth applying
+    maybe: Consider
+    skip: Not recommended
+  rec:
+    recommendAll: "Worth applying: all required met ($1/$2)"
+    recommendSome: "Worth applying: required met $1/$2, strong on preferred; only missing $3"
+    maybe: "Consider: required met $1/$2; missing $3 — shore these up before applying"
+    skip: "Not recommended: only $1/$2 required met — a big gap"
+    noHard: This role lists no verifiable hard requirements — it's mostly soft skills and attitude, so use your own judgment
+  error:
+    noResume: No resume saved yet. Paste and save your resume in the popup first
+    noJd: Couldn't capture the job description. Open a job detail page and try again
+    noConfig: Extension config not found. Configure an LLM provider in settings first
+    noLlm: No LLM with an API key found. Add a key for DeepSeek/OpenRouter etc. in settings and enable it
+    noReqs: "Couldn't parse the job requirements (captured ~$1 chars, starting with: $2…). Make sure you're on a job detail page"

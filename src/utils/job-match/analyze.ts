@@ -1,8 +1,20 @@
 import type { Config } from "@/types/config/config"
-import { storage } from "#imports"
+import { browser, i18n, storage } from "#imports"
 import { isLLMProvider } from "@/types/config/provider"
 import { CONFIG_STORAGE_KEY } from "@/utils/constants/config"
 import { sendMessage } from "@/utils/message"
+
+/** 跟随浏览器界面语言，决定 LLM 用什么语言输出分析结果。 */
+function outputLanguageName(): string {
+  const code = browser.i18n.getUILanguage().toLowerCase()
+  if (code.startsWith("ja"))
+    return "日本語"
+  if (code.startsWith("ko"))
+    return "한국어"
+  if (code.startsWith("zh"))
+    return "简体中文"
+  return "English"
+}
 
 export type ReqType = "must" | "nice"
 export type Met = "yes" | "no" | "unclear"
@@ -39,13 +51,14 @@ function extractJson(raw: string): string {
   const start = afterThink.indexOf("{")
   const end = afterThink.lastIndexOf("}")
   if (start === -1 || end === -1 || end < start) {
-    throw new Error("模型未返回有效的 JSON")
+    throw new Error(i18n.t("jobMatch.card.invalidJson"))
   }
   return afterThink.slice(start, end + 1)
 }
 
 // ---- Step 1: 只看 JD，客观抽取要求（不看简历，避免偏向已匹配项）----
-const EXTRACT_SYSTEM = `你是招聘要求分析专家。请从职位描述(JD)中提取**对候选人的资格要求**（候选人需要"具备"什么），分两类：
+function extractSystem(lang: string): string {
+  return `你是招聘要求分析专家。请从职位描述(JD)中提取**对候选人的资格要求**（候选人需要"具备"什么），分两类：
 
 - "must"：硬性资格。常见段落标题（写法多样，按含义识别，不要死抠字面）：Minimum/Basic/Required Qualifications、Qualifications、Requirements、Required Skills、What you'll need、What you bring、Who you are、About you、Skills & Experience、Must have、Essential、We're looking for、任职要求、岗位要求 等。**逐条**提取。
 - "nice"：加分项。常见标题：Preferred Qualifications、Nice to have、Nice-to-haves、Bonus、Bonus points、A plus、Plus、Desirable、Good to have、Advantageous、Ideally、Even better、加分项、优先 等。**逐条**提取。
@@ -66,18 +79,21 @@ const EXTRACT_SYSTEM = `你是招聘要求分析专家。请从职位描述(JD)�
 2. 一个要点对应一条，保留关键数字/学历/专业/技术名。
 3. 资格段落里每一条都要在，别漏。
 
-只看 JD，不分析候选人。每条用简洁中文。只输出 JSON，不要多余文字、不要代码块：
+只看 JD，不分析候选人。所有输出文字（要求点）用「${lang}」书写。只输出 JSON，不要多余文字、不要代码块：
 {"requirements":[{"text":"要求点","type":"must"或"nice","soft":true或false}]}`
+}
 
 // ---- Step 2: 拿要求逐条比简历，严格诚实，不许抬分 ----
-const MATCH_SYSTEM = `你是严格、诚实的求职匹配助手，绝不为了讨好用户而抬高匹配度。
+function matchSystem(lang: string): string {
+  return `你是严格、诚实的求职匹配助手，绝不为了讨好用户而抬高匹配度。
 给你一份【候选人简历】和一组【职位要求】。逐条判断简历是否满足每条要求：
 - "yes"：简历有明确证据
 - "no"：简历明显不具备
 - "unclear"：简历没提到、无法确认
-宁可保守：没有明确证据就不要给 yes。每条给一句很短的中文 note（符合的依据，或缺了什么）。
-保持要求的条数、文字、type 与输入一致。只输出 JSON，不要多余文字、不要代码块：
+宁可保守：没有明确证据就不要给 yes。每条给一句很短的 note（用「${lang}」书写，符合的依据，或缺了什么）。
+保持要求的条数、文字、type 与输入一致。要求点(text)也用「${lang}」书写。只输出 JSON，不要多余文字、不要代码块：
 {"matches":[{"text":"要求点","type":"must"或"nice","met":"yes"或"no"或"unclear","note":"很短的说明"}]}`
+}
 
 async function callLLM(providerId: string, system: string, prompt: string): Promise<string> {
   const { text } = await sendMessage("backgroundGenerateText", {
@@ -142,33 +158,37 @@ function decide(reqs: RequirementMatch[]): { verdict: Verdict, recommendation: s
     verdict = niceLift ? "recommend" : "maybe"
   }
 
+  const m = String(mustMet)
+  const t = String(mustTotal)
+  const missingStr = missing.join(", ")
   let recommendation: string
   if (verdict === "recommend") {
     recommendation = missing.length === 0
-      ? `值得投：硬性要求全部满足（${mustMet}/${mustTotal}）`
-      : `值得投：硬性要求满足 ${mustMet}/${mustTotal}，加分项满足度高，仅差「${missing.join("、")}」`
+      ? i18n.t("jobMatch.rec.recommendAll", [m, t])
+      : i18n.t("jobMatch.rec.recommendSome", [m, t, missingStr])
   }
   else if (verdict === "maybe") {
-    recommendation = `可以考虑：硬性要求满足 ${mustMet}/${mustTotal}，欠缺「${missing.join("、")}」，投前最好补强`
+    recommendation = i18n.t("jobMatch.rec.maybe", [m, t, missingStr])
   }
   else {
-    recommendation = `不建议投：硬性要求只满足 ${mustMet}/${mustTotal}，差距较大`
+    recommendation = i18n.t("jobMatch.rec.skip", [m, t])
   }
 
   return { verdict, recommendation }
 }
 
 export async function analyzeMatch(resume: string, jd: string): Promise<MatchResult> {
+  const lang = outputLanguageName()
   if (!resume.trim()) {
-    throw new Error("还没保存简历，请先在插件下拉框里粘贴并保存简历")
+    throw new Error(i18n.t("jobMatch.error.noResume"))
   }
   if (!jd.trim()) {
-    throw new Error("没抓到职位描述，请打开一个职位详情页再试")
+    throw new Error(i18n.t("jobMatch.error.noJd"))
   }
 
   const config = await storage.getItem<Config>(`local:${CONFIG_STORAGE_KEY}`)
   if (!config) {
-    throw new Error("插件配置未找到，请先在设置里配置 LLM 服务商")
+    throw new Error(i18n.t("jobMatch.error.noConfig"))
   }
 
   // 选一个填了 API Key 的 LLM（跳过空的 OpenAI 占位、跳过微软/谷歌纯翻译）。
@@ -183,11 +203,11 @@ export async function analyzeMatch(resume: string, jd: string): Promise<MatchRes
       ?? llmWithKey[0]?.id
       ?? providers.find(p => p.provider === "ollama" && p.enabled)?.id
   if (!providerId) {
-    throw new Error("没找到已填 API Key 的大模型(LLM)。请在插件设置里给 DeepSeek 填好 API Key 并启用")
+    throw new Error(i18n.t("jobMatch.error.noLlm"))
   }
 
   // Step 1：抽取 JD 要求 + 标注 soft/hard（只看 JD）
-  const extractRaw = await callLLM(providerId, EXTRACT_SYSTEM, `【职位描述 JD】\n${jd}`)
+  const extractRaw = await callLLM(providerId, extractSystem(lang), `【职位描述 JD】\n${jd}`)
   const { requirements: rawReqs = [] } = JSON.parse(extractJson(extractRaw)) as {
     requirements?: { text?: string, type?: string, soft?: boolean }[]
   }
@@ -200,7 +220,7 @@ export async function analyzeMatch(resume: string, jd: string): Promise<MatchRes
     }))
   if (allReqs.length === 0) {
     const preview = jd.replace(/\s+/g, " ").slice(0, 80)
-    throw new Error(`没能解析出职位要求（抓到正文约 ${jd.length} 字，开头：「${preview}…」）。确认在职位详情页再试`)
+    throw new Error(i18n.t("jobMatch.error.noReqs", [String(jd.length), preview]))
   }
 
   // 只对"硬性、可核实"的要求评分；软性的单独展示、不计分
@@ -214,7 +234,7 @@ export async function analyzeMatch(resume: string, jd: string): Promise<MatchRes
       requirements: [],
       softRequirements,
       verdict: "maybe",
-      recommendation: "该职位没有可量化的硬性要求，主要看软素质与态度，请结合自身情况判断",
+      recommendation: i18n.t("jobMatch.rec.noHard"),
       flexible,
     }
   }
@@ -222,7 +242,7 @@ export async function analyzeMatch(resume: string, jd: string): Promise<MatchRes
   // Step 2：逐条比对简历（只比硬性要求）
   const matchRaw = await callLLM(
     providerId,
-    MATCH_SYSTEM,
+    matchSystem(lang),
     `【候选人简历】\n${resume}\n\n【职位要求】\n${JSON.stringify(hardReqs.map(({ text, type }) => ({ text, type })), null, 2)}`,
   )
   const { matches: rawMatches = [] } = JSON.parse(extractJson(matchRaw)) as {
@@ -239,7 +259,7 @@ export async function analyzeMatch(resume: string, jd: string): Promise<MatchRes
     }))
 
   if (matched.length === 0) {
-    throw new Error("匹配结果为空，请重试（模型可能未正确返回）")
+    throw new Error(i18n.t("jobMatch.card.emptyResult"))
   }
 
   // must 排在前面，方便用户先看硬要求
