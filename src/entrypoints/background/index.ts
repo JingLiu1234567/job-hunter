@@ -33,13 +33,6 @@ export default defineBackground({
     browser.runtime.onInstalled.addListener(async (details) => {
       await ensureInitializedConfig()
 
-      // Open tutorial page when extension is installed
-      if (details.reason === "install") {
-        await browser.tabs.create({
-          url: `${env.WXT_WEBSITE_URL}/guide/step-1`,
-        })
-      }
-
       // Clear blog cache on extension update to fetch latest blog posts
       if (details.reason === "update") {
         logger.info("[Background] Extension updated, clearing blog cache")
