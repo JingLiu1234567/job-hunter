@@ -1295,6 +1295,10 @@ jobMatch:
     placeholder: Paste your resume here — saved locally and used for job matching…
     charUnit: chars
     empty: No resume yet
+    upload: Upload
+    parsing: Reading file…
+    unsupported: Only PDF, Word (.docx) or .txt files are supported
+    parseFailed: Couldn't read the file — try pasting the text instead
   card:
     title: Job Match
     close: Close
