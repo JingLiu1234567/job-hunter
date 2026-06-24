@@ -60,15 +60,19 @@ function getUILang(): string {
 }
 
 export async function setupUninstallSurvey() {
+  // Job Hunter: no uninstall survey — don't open any page on uninstall.
+  void browser.runtime.setUninstallURL("")
+}
+
+// Kept for reference; no longer used.
+export function buildSurveyUrl(): string {
   const surveyUrl = i18n.t("uninstallSurveyUrl") as string
   const browserType = import.meta.env.BROWSER
-
   const url = new URL(surveyUrl)
   url.searchParams.set("rf_version", EXTENSION_VERSION)
   url.searchParams.set("browser_type", browserType)
   url.searchParams.set("browser_version", getBrowserVersion(browserType))
   url.searchParams.set("os", getOS())
   url.searchParams.set("ui_lang", getUILang())
-
-  void browser.runtime.setUninstallURL(url.toString())
+  return url.toString()
 }
