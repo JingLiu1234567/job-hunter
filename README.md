@@ -14,6 +14,11 @@ Built for non-native speakers job-hunting abroad. Forked from the open-source [R
   <img src="screenshots/match-highlight.png" width="49%" alt="Hidden 'other' requirements — click one to scroll to and grey-highlight the exact sentence in the job post" />
 </p>
 
+<p align="center">
+  <img src="screenshots/match-en.png" width="49%" alt="The same job analysed in English" />
+  <img src="screenshots/match-zh.png" width="49%" alt="…and in 中文 — the UI and the analysis output follow your browser language" />
+</p>
+
 ## Why
 
 Tools like LinkedIn Premium or Jobscan tend to **inflate** your fit — a few overlapping skill tags and you're a "medium match", so you waste time applying to roles you don't qualify for. This extension does the opposite: it reads the **actual requirements** and tells you, honestly, when to **skip**.
