@@ -1,5 +1,5 @@
-name: 找工作神器
-extName: 找工作神器
+name: Job Hunter
+extName: Job Hunter
 extDescription: 幫你找工作的瀏覽器擴充功能：網頁雙語翻譯 + AI 分析職位。基於開源專案 Read Frog 改造。
 uninstallSurveyUrl: https://tally.so/r/3E9XDL
 dataTypes:

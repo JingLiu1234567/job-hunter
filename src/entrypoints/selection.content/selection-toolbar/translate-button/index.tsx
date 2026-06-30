@@ -1,4 +1,4 @@
-import { RiTranslate } from "@remixicon/react"
+import { IconWorld } from "@tabler/icons-react"
 import { useAtomValue } from "jotai"
 import { i18n } from "#imports"
 import { Kbd, KbdGroup } from "@/components/ui/base-ui/kbd"
@@ -39,7 +39,7 @@ export function TranslateButton() {
         />
       )}
     >
-      <RiTranslate className="size-4.5" />
+      <IconWorld className="size-4.5" />
     </SelectionToolbarTooltip>
   )
 }

@@ -1,8 +1,9 @@
-import type { MatchResult, RequirementMatch, Verdict } from "@/utils/job-match/analyze"
+import type { ImplicitRequirement, MatchResult, RequirementMatch, Verdict } from "@/utils/job-match/analyze"
 import { IconCheck, IconLoader2, IconMinus, IconX } from "@tabler/icons-react"
 import { useAtom } from "jotai"
 import { useEffect, useRef, useState } from "react"
 import { i18n } from "#imports"
+import { clearQuoteHighlight, highlightQuoteOnPage } from "@/utils/job-match/highlight"
 import { getCardLayout, setCardLayout } from "@/utils/job-match/storage"
 import { cn } from "@/utils/styles/utils"
 import { matchStateAtom } from "../atoms"
@@ -28,6 +29,21 @@ const VERDICT_META: Record<Verdict, { emoji: string, badge: string }> = {
   },
 }
 
+/** 把"其他要求"按来源板块分组，保留板块首次出现的顺序。 */
+function groupBySection(items: ImplicitRequirement[]): { section: string, items: ImplicitRequirement[] }[] {
+  const groups: { section: string, items: ImplicitRequirement[] }[] = []
+  for (const item of items) {
+    const key = item.section || ""
+    let group = groups.find(g => g.section === key)
+    if (!group) {
+      group = { section: key, items: [] }
+      groups.push(group)
+    }
+    group.items.push(item)
+  }
+  return groups
+}
+
 function MetIcon({ met }: { met: RequirementMatch["met"] }) {
   if (met === "yes")
     return <IconCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-500" strokeWidth={3} />
@@ -41,9 +57,21 @@ function RequirementRow({ req }: { req: RequirementMatch }) {
     <div className="flex items-start gap-1.5 text-[13px]">
       <MetIcon met={req.met} />
       <div className="min-w-0">
-        <span>{req.text}</span>
+        <span>
+          {req.text}
+          {req.veto && (
+            <span className="ml-1 inline-block rounded-sm bg-red-100 px-1 py-px align-middle text-[10px] font-semibold text-red-600 dark:bg-red-900 dark:text-red-300">
+              {i18n.t("jobMatch.card.vetoBadge")}
+            </span>
+          )}
+        </span>
         {req.note && (
           <span className="block text-[11px] leading-snug text-neutral-400">{req.note}</span>
+        )}
+        {req.met === "unclear" && (
+          <span className="mt-0.5 block text-[11px] leading-snug text-amber-600 dark:text-amber-400">
+            ✎ {i18n.t("jobMatch.card.resumeGapHint")}
+          </span>
         )}
       </div>
     </div>
@@ -56,6 +84,32 @@ function ResultView({ result }: { result: MatchResult }) {
   const nices = result.requirements.filter(r => r.type === "nice")
   const mustMet = musts.filter(r => r.met === "yes").length
   const niceMet = nices.filter(r => r.met === "yes").length
+
+  // 当前在网页上高亮定位的那条"其他要求"（用 quote 作标识）
+  const [selectedQuote, setSelectedQuote] = useState<string | null>(null)
+  // 点了但没能在页面里定位到的那条
+  const [failedQuote, setFailedQuote] = useState<string | null>(null)
+
+  // 换了一次分析结果，或卡片卸载时，清掉页面上的高亮
+  useEffect(() => {
+    setSelectedQuote(null)
+    setFailedQuote(null)
+    clearQuoteHighlight()
+    return () => clearQuoteHighlight()
+  }, [result])
+
+  const handleImplicitClick = (item: ImplicitRequirement) => {
+    // 再点一次同一条 → 取消高亮
+    if (selectedQuote === item.quote) {
+      clearQuoteHighlight()
+      setSelectedQuote(null)
+      return
+    }
+    // 直接在实时网页里找；找到就高亮+滚动，找不到就提示
+    const ok = highlightQuoteOnPage(item.quote)
+    setSelectedQuote(ok ? item.quote : null)
+    setFailedQuote(ok ? null : item.quote)
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -112,6 +166,62 @@ function ResultView({ result }: { result: MatchResult }) {
                 ·
                 {" "}
                 {text}
+              </div>
+            ))}
+          </>
+        )}
+
+        {result.implicit.length > 0 && (
+          <>
+            <div className="my-1.5 border-t border-neutral-200 dark:border-neutral-700" />
+            <span className="text-xs font-semibold text-indigo-500 dark:text-indigo-400">
+              🔍 {i18n.t("jobMatch.card.implicitSection")}
+            </span>
+            {groupBySection(result.implicit).map(group => (
+              <div key={group.section || "_"} className="mt-1">
+                {group.section && (
+                  <div className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+                    {i18n.t("jobMatch.card.inSection", [group.section])}
+                  </div>
+                )}
+                {group.items.map(item => (
+                  <div
+                    key={`implicit-${item.quote}`}
+                    role="button"
+                    tabIndex={0}
+                    title={i18n.t("jobMatch.card.locateHint")}
+                    onClick={() => handleImplicitClick(item)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault()
+                        handleImplicitClick(item)
+                      }
+                    }}
+                    className={cn(
+                      "mt-0.5 flex items-start gap-1.5 rounded-md px-1 py-0.5 text-[13px] cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800",
+                      selectedQuote === item.quote && "bg-neutral-200 dark:bg-neutral-700",
+                    )}
+                  >
+                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400" />
+                    <div className="min-w-0">
+                      <span>
+                        {item.text}
+                        <span className="ml-1 align-middle text-[10px] text-indigo-400">📍</span>
+                      </span>
+                      {item.why && (
+                        <span className="block text-[11px] leading-snug text-neutral-400">{item.why}</span>
+                      )}
+                      <span className="mt-0.5 block border-l-2 border-neutral-200 pl-1.5 text-[11px] italic leading-snug text-neutral-400 dark:border-neutral-700">
+                        “{item.quote}”
+                      </span>
+                      {failedQuote === item.quote && (
+                        <span className="mt-0.5 block text-[11px] leading-snug text-red-500 dark:text-red-400">
+                          {i18n.t("jobMatch.card.locateFailed")}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             ))}
           </>

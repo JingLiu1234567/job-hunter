@@ -1,5 +1,5 @@
 name: Job Hunter
-extName: "Job Hunter 找工作神器"
+extName: Job Hunter
 extDescription: A job-hunting browser extension — bilingual translation of job pages plus AI analysis. Based on the open-source project Read Frog.
 uninstallSurveyUrl: https://tally.so/r/nPK6Ob
 dataTypes:
@@ -1307,7 +1307,13 @@ jobMatch:
     preferred: Preferred
     requiredSection: Required
     preferredSection: Preferred
+    vetoBadge: deal-breaker
     softSection: Soft skills (mentioned, not scored)
+    implicitSection: Other requirements
+    inSection: "In $1:"
+    locateHint: Click to find and highlight it in the job post
+    locateFailed: Couldn't locate this in the page (the text may be collapsed or hidden)
+    resumeGapHint: Not found in your résumé — if you actually have this, add it to meet the requirement
     flexibleNote: "✱ The employer says you don't need to meet every requirement — apply if you're a good fit"
     emptyResult: Empty result, please try again
     invalidJson: The model did not return valid JSON
@@ -1320,6 +1326,7 @@ jobMatch:
     recommendSome: "Worth applying: required met $1/$2, strong on preferred; only missing $3"
     maybe: "Consider: required met $1/$2; missing $3 — shore these up before applying"
     skip: "Not recommended: only $1/$2 required met — a big gap"
+    veto: "Not recommended: missing a deal-breaker requirement ($1) — without it you won't pass the initial screen"
     noHard: This role lists no verifiable hard requirements — it's mostly soft skills and attitude, so use your own judgment
   error:
     noResume: No resume saved yet. Paste and save your resume in the popup first

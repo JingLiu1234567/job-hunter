@@ -1,8 +1,7 @@
 import type { ComponentType } from "react"
 import { lazy, Suspense } from "react"
-import { Route, Routes } from "react-router"
+import { Navigate, Route, Routes } from "react-router"
 import { ROUTE_DEFS } from "./app-sidebar/nav-items"
-import { GeneralPage } from "./pages/general"
 
 type RoutePath = (typeof ROUTE_DEFS)[number]["path"]
 
@@ -18,8 +17,7 @@ const TextToSpeechPage = lazy(() => import("./pages/text-to-speech").then(module
 const StatisticsPage = lazy(() => import("./pages/statistics").then(module => ({ default: module.StatisticsPage })))
 const ConfigPage = lazy(() => import("./pages/config").then(module => ({ default: module.ConfigPage })))
 
-const ROUTE_COMPONENTS: Record<RoutePath, ComponentType> = {
-  "/": GeneralPage,
+const ROUTE_COMPONENTS: Record<Exclude<RoutePath, "/">, ComponentType> = {
   "/api-providers": ApiProvidersPage,
   "/custom-actions": CustomActionsPage,
   "/translation": TranslationPage,
@@ -45,7 +43,8 @@ export default function App() {
   return (
     <Suspense fallback={<RouteLoadingFallback />}>
       <Routes>
-        {ROUTE_DEFS.map(({ path }) => {
+        <Route path="/" element={<Navigate to="/api-providers" replace />} />
+        {ROUTE_DEFS.filter((def): def is { path: Exclude<RoutePath, "/"> } => def.path !== "/").map(({ path }) => {
           const Component = ROUTE_COMPONENTS[path]
           return <Route key={path} path={path} element={<Component />} />
         })}

@@ -2,7 +2,7 @@ import { storage } from "#imports"
 
 // Local storage key for the user's saved resume text.
 // Kept separate from Read Frog's config system on purpose: this is our own
-// "找工作神器" feature data, so we avoid touching their config schema/migrations.
+// "Job Hunter" feature data, so we avoid touching their config schema/migrations.
 const RESUME_KEY = "local:jobhunter_resume"
 
 export async function getResume(): Promise<string> {

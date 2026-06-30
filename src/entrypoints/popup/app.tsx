@@ -4,7 +4,6 @@ import { openOptionsPage } from "@/utils/navigation"
 import { version } from "../../../package.json"
 import { AlwaysTranslate } from "./components/always-translate"
 import LanguageOptionsSelector from "./components/language-options-selector"
-import { MoreMenu } from "./components/more-menu"
 import { ResumeSection } from "./components/resume-section"
 import { SiteControlToggle } from "./components/site-control-toggle"
 import TranslateButton from "./components/translate-button"
@@ -30,7 +29,7 @@ function App() {
           type="button"
           className="flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 hover:bg-neutral-300 dark:hover:bg-neutral-700"
           onClick={() => {
-            void openOptionsPage()
+            void openOptionsPage({ route: "/api-providers" })
           }}
         >
           <Icon icon="tabler:settings" className="size-4" strokeWidth={1.6} />
@@ -41,7 +40,6 @@ function App() {
         <span className="text-sm text-neutral-500 dark:text-neutral-400">
           {version}
         </span>
-        <MoreMenu />
       </div>
     </>
   )
