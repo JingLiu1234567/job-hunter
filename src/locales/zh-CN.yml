@@ -1,5 +1,5 @@
-name: 找工作神器
-extName: 找工作神器
+name: Job Hunter
+extName: Job Hunter
 extDescription: 帮你找工作的浏览器插件：网页双语翻译 + AI 分析职位。基于开源项目 Read Frog 改造。
 uninstallSurveyUrl: https://tally.so/r/3E9XDL
 dataTypes:
@@ -1307,7 +1307,13 @@ jobMatch:
     preferred: 加分
     requiredSection: 必须要求
     preferredSection: 加分项
+    vetoBadge: 一票否决
     softSection: 软性要求（招聘方提到，未计入评分）
+    implicitSection: 其他要求
+    inSection: "来自 $1："
+    locateHint: 点击在原文中定位并高亮
+    locateFailed: 未能在页面中定位到这句（原文可能被折叠或隐藏了）
+    resumeGapHint: 简历未提及——若你确实具备，补进简历即可满足这条
     flexibleNote: "✱ 招聘方说明：不必满足全部要求，方向契合也欢迎投递"
     emptyResult: 匹配结果为空，请重试（模型可能未正确返回）
     invalidJson: 模型未返回有效的 JSON
@@ -1320,6 +1326,7 @@ jobMatch:
     recommendSome: "值得投：硬性要求满足 $1/$2，加分项满足度高，仅差 $3"
     maybe: "可以考虑：硬性要求满足 $1/$2，欠缺 $3，投前最好补强"
     skip: "不建议投：硬性要求只满足 $1/$2，差距较大"
+    veto: "不建议投：缺少一票否决的硬性条件（$1）—— 这类要求不满足，基本过不了初筛"
     noHard: 该职位没有可量化的硬性要求，主要看软素质与态度，请结合自身情况判断
   error:
     noResume: 还没保存简历，请先在插件下拉框里粘贴并保存简历

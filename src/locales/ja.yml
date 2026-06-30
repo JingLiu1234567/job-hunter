@@ -1,6 +1,6 @@
-name: 読書カエル
-extName: 読書カエル - 翻訳して学ぶ
-extDescription: 読書カエルは、あらゆるウェブサイトから言語を深く学ぶために設計されたオープンソースのブラウザ拡張機能です。
+name: Job Hunter
+extName: Job Hunter
+extDescription: 求職を助けるブラウザ拡張機能：求人ページのバイリンガル翻訳 + AI による求人分析。オープンソースプロジェクト Read Frog をベースに改造。
 uninstallSurveyUrl: https://tally.so/r/nPK6Ob
 dataTypes:
   string: テキスト
@@ -1192,7 +1192,13 @@ jobMatch:
     preferred: 歓迎
     requiredSection: 必須要件
     preferredSection: 歓迎要件
+    vetoBadge: 決定的
     softSection: ソフトスキル（記載あり・評価対象外）
+    implicitSection: その他の要件
+    inSection: "$1 より："
+    locateHint: クリックで原文の該当箇所をハイライト
+    locateFailed: 原文の該当箇所が見つかりませんでした（折りたたみ/非表示の可能性）
+    resumeGapHint: 履歴書に記載なし——実際にお持ちなら追記すれば満たせます
     flexibleNote: "✱ 全要件を満たさなくても応募歓迎との記載があります"
     emptyResult: 結果が空でした。もう一度お試しください
     invalidJson: モデルが有効なJSONを返しませんでした
@@ -1205,6 +1211,7 @@ jobMatch:
     recommendSome: "応募推奨：必須要件 $1/$2、歓迎要件も高水準。不足は $3 のみ"
     maybe: "検討の余地あり：必須要件 $1/$2、不足は $3。応募前の補強を推奨"
     skip: "応募非推奨：必須要件は $1/$2 のみで差が大きい"
+    veto: "応募非推奨：決定的な必須条件（$1）を満たしていません —— これがないと初期選考を通過できません"
     noHard: この求人には検証可能な必須要件がなく、主にソフトスキルと姿勢が問われます。ご自身でご判断ください
   error:
     noResume: 履歴書が未保存です。先にポップアップで履歴書を貼り付けて保存してください

@@ -10,7 +10,7 @@ import { cn } from "@/utils/styles/utils"
 const TABLER_ICON_STROKE_WIDTH_CLASS = "[&_path]:[stroke-width:1.2]"
 
 const MODE_ICON: Record<TranslationModeType, { icon: string, className?: string }> = {
-  bilingual: { icon: "garden:translation-exists-stroke-16" },
+  bilingual: { icon: "tabler:world" },
   translationOnly: { icon: "tabler:text-resize", className: TABLER_ICON_STROKE_WIDTH_CLASS },
 }
 
