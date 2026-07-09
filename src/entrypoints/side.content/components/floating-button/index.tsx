@@ -20,6 +20,7 @@ import { cn } from "@/utils/styles/utils"
 import { matchDomainPattern } from "@/utils/url"
 import { enablePageTranslationAtom, isDraggingButtonAtom } from "../../atoms"
 import { shadowWrapper } from "../../index"
+import ChatButton from "./chat-button"
 import HiddenButton from "./components/hidden-button"
 import MatchButton from "./match-button"
 import TranslateButton from "./translate-button"
@@ -363,6 +364,12 @@ export default function FloatingButton() {
       )}
       {!isDraggingButton && (
         <MatchButton
+          side={floatingButtonSide}
+          expanded={isFloatingButtonExpanded}
+        />
+      )}
+      {!isDraggingButton && (
+        <ChatButton
           side={floatingButtonSide}
           expanded={isFloatingButtonExpanded}
         />

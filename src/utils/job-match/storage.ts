@@ -35,3 +35,15 @@ export async function getCardLayout(): Promise<CardLayout> {
 export async function setCardLayout(layout: CardLayout): Promise<void> {
   await storage.setItem(CARD_LAYOUT_KEY, layout)
 }
+
+// Remembered position/size of the AI chat panel — separate key so it doesn't
+// collide with the match card's own remembered layout (both can be open at once).
+const CHAT_LAYOUT_KEY = "local:jobhunter_chat_layout"
+
+export async function getChatLayout(): Promise<CardLayout> {
+  return (await storage.getItem<CardLayout>(CHAT_LAYOUT_KEY)) ?? {}
+}
+
+export async function setChatLayout(layout: CardLayout): Promise<void> {
+  await storage.setItem(CHAT_LAYOUT_KEY, layout)
+}

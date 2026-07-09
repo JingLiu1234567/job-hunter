@@ -104,6 +104,110 @@ function isVisible(el: HTMLElement): boolean {
   return rect.width > 0 && rect.height > 0
 }
 
+// 职位"标题卡"区域候选选择器（工作模式/薪资标签通常在这里，不在 JD 正文容器内）。
+// 用 [class*=] 抗 LinkedIn class 名变动；命中就地取文字，范围小，误抓风险低。
+const LINKEDIN_TOPCARD_SELECTORS = [
+  "[class*='jobs-unified-top-card']",
+  "[class*='job-details-jobs-unified-top-card']",
+  "[class*='topcard']",
+]
+
+function extractTopCardText(): string {
+  const body = document.body
+  if (!body)
+    return ""
+  for (const selector of LINKEDIN_TOPCARD_SELECTORS) {
+    const el = body.querySelector<HTMLElement>(selector)
+    if (el && isVisible(el)) {
+      const text = el.innerText ?? ""
+      if (text.trim().length > 0)
+        return text
+    }
+  }
+  return ""
+}
+
+const WORK_MODE_RE = {
+  hybrid: /\bhybrid\b|混合(?:办公|模式|工作)/i,
+  onsite: /\bon-?site\b|\bin-?office\b|现场办公|驻场|坐班/i,
+  remote: /\b(?:fully\s+)?remote\b|远程(?:办公|工作)/i,
+} as const
+
+/** 正文里没有直接的"Hybrid"标签词，但明确写了"每周到岗 N 天"这类混合办公的具体描述。 */
+const HYBRID_DAYS_RE = /\d+\s*days?\s*(?:a|per)\s*week[^.]{0,30}(?:office|on-?site)/i
+const HYBRID_DAYS_RE_ZH = /每周[^。]{0,6}\d+\s*天[^。]{0,10}(?:到岗|办公室|坐班)/
+
+function detectWorkMode(text: string): "remote" | "hybrid" | "onsite" | undefined {
+  if (!text)
+    return undefined
+  if (WORK_MODE_RE.hybrid.test(text) || HYBRID_DAYS_RE.test(text) || HYBRID_DAYS_RE_ZH.test(text))
+    return "hybrid"
+  if (WORK_MODE_RE.onsite.test(text))
+    return "onsite"
+  if (WORK_MODE_RE.remote.test(text))
+    return "remote"
+  return undefined
+}
+
+// 货币符号 + 数字（可选区间、可选 k 简写），如 "$98,900 - $164,900" / "£50k"。
+const SALARY_RE = /[$£€¥]\s?\d[\d,]*(?:\.\d+)?\s?k?(?:\s*(?:[-–—]|to)\s*[$£€¥]?\s?\d[\d,]*(?:\.\d+)?\s?k?)?/gi
+
+// 数字附近出现这些词，说明这不是薪资本身（奖金/养老金/福利津贴等），排除掉。
+const SALARY_NEGATIVE_CONTEXT_RE = /\b(?:bonus|discretionary|pension|allowance|perkbox|voucher|reward\s+scheme)\b/i
+// 只有在 JD 正文里退化查找时才要求"数字附近得出现薪资相关词"；
+// LinkedIn 标题卡区域本来就是专门展示薪资的地方，不需要这层校验。
+const SALARY_POSITIVE_CONTEXT_RE = /\b(?:salary|compensation|remuneration|base\s*pay|pay\s*range|package)\b/i
+const SALARY_CONTEXT_WINDOW = 40
+
+function hasNearbyContext(text: string, idx: number, len: number, re: RegExp): boolean {
+  const before = text.slice(Math.max(0, idx - SALARY_CONTEXT_WINDOW), idx)
+  const after = text.slice(idx + len, idx + len + SALARY_CONTEXT_WINDOW)
+  return re.test(before) || re.test(after)
+}
+
+function detectSalary(text: string, opts: { requirePositiveContext?: boolean } = {}): string | undefined {
+  if (!text)
+    return undefined
+  for (const m of text.matchAll(SALARY_RE)) {
+    const raw = m[0]
+    const digits = raw.replace(/\D/g, "")
+    // 过滤掉"$5"这种明显不是薪资的小额匹配：至少 4 位数字，或者带 k 简写
+    if (digits.length < 4 && !/k/i.test(raw))
+      continue
+    const idx = m.index ?? text.indexOf(raw)
+    // 排除明显是奖金/养老金/福利津贴的数字，不是真正的薪资
+    if (hasNearbyContext(text, idx, raw.length, SALARY_NEGATIVE_CONTEXT_RE))
+      continue
+    if (opts.requirePositiveContext && !hasNearbyContext(text, idx, raw.length, SALARY_POSITIVE_CONTEXT_RE))
+      continue
+    const after = text.slice(idx + raw.length, idx + raw.length + 24)
+    const unit = after.match(/^\s*(?:per\s+(?:year|annum|hour|month|day)|\/\s?(?:yr|hr|mo)|annually)/i)
+    return unit ? `${raw} ${unit[0].trim()}` : raw
+  }
+  return undefined
+}
+
+export interface JobMeta {
+  /** 工作模式：远程/混合/现场——抓不到就 undefined，不强行展示 */
+  workMode?: "remote" | "hybrid" | "onsite"
+  /** 薪资范围（如有提及）——抓不到就 undefined */
+  salary?: string
+}
+
+/**
+ * 抓取工作模式和薪资这类"纯展示信息"：优先用 LinkedIn 标题卡区域（准确、范围小），
+ * 抓不到再退化到 JD 正文里找（这一步要求数字附近有"salary/compensation"等词，
+ * 且排除"bonus/pension"等语境，避免把奖金/福利津贴误当成薪资）。
+ * 不参与打分，抓不到就不显示，不强行标"未提及"。
+ */
+export function extractJobMeta(jd: string): JobMeta {
+  const topCardText = extractTopCardText()
+  return {
+    workMode: detectWorkMode(topCardText) ?? detectWorkMode(jd),
+    salary: detectSalary(topCardText) ?? detectSalary(jd, { requirePositiveContext: true }),
+  }
+}
+
 export function extractJD(): string {
   const body = document.body
   if (!body)

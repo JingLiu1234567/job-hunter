@@ -1,18 +1,23 @@
-import type { Config } from "@/types/config/config"
-import { browser, i18n, storage } from "#imports"
-import { isLLMProvider } from "@/types/config/provider"
-import { CONFIG_STORAGE_KEY } from "@/utils/constants/config"
+import { browser, i18n } from "#imports"
+import { pickLLMProviderId } from "@/utils/job-match/provider"
 import { sendMessage } from "@/utils/message"
 
-/** 跟随浏览器界面语言，决定 LLM 用什么语言输出分析结果。 */
-function outputLanguageName(): string {
-  const code = browser.i18n.getUILanguage().toLowerCase()
-  if (code.startsWith("ja"))
-    return "日本語"
-  if (code.startsWith("ko"))
-    return "한국어"
-  if (code.startsWith("zh"))
-    return "简体中文"
+/**
+ * 跟随浏览器界面语言，决定 LLM 用什么语言输出分析结果。聊天面板也用这个，保证语气一致。
+ * 用 Intl.DisplayNames 从浏览器语言代码生成该语言的原生名称（如 ar → العربية、it → italiano），
+ * 不写死具体语言列表——理论上覆盖 Intl 支持的所有语言，不用每加一种语言就改一次代码。
+ * 认不出的语言代码（极冷门/畸形）才退化成英文。
+ */
+export function outputLanguageName(): string {
+  const code = browser.i18n.getUILanguage()
+  try {
+    const name = new Intl.DisplayNames([code], { type: "language" }).of(code)
+    if (name)
+      return name
+  }
+  catch {
+    // Intl.DisplayNames 对畸形/未知 locale code 会抛错，退化到英文
+  }
   return "English"
 }
 
@@ -27,6 +32,11 @@ export interface RequirementMatch {
   type: ReqType
   /** 简历是否满足 */
   met: Met
+  /**
+   * met === "unclear" 时，区分"简历没写"(not_mentioned，值得建议补简历) 和
+   * "简历写了但要求本身/证据有解读空间"(ambiguous，补简历没用)。其它 met 值下无意义。
+   */
+  unclearReason?: "not_mentioned" | "ambiguous"
   /** 一句话依据或缺口 */
   note?: string
   /** 硬否决项：缺了它基本一票否决（语言/工签/法定证照/明确 required 的核心硬技能）。未满足直接 🔴 */
@@ -60,6 +70,10 @@ export interface MatchResult {
   recommendation: string
   /** JD 是否明示"不必满足全部要求"（前端醒目提示用） */
   flexible: boolean
+  /** 工作模式（远程/混合/现场）——纯展示信息，从页面/JD正文抓取，不参与打分 */
+  workMode?: "remote" | "hybrid" | "onsite"
+  /** 薪资范围（如有提及）——纯展示信息，不参与打分 */
+  salary?: string
 }
 
 const THINK_TAG_RE = /<\/think>([\s\S]*)/
@@ -118,22 +132,24 @@ function extractSystem(lang: string): string {
 - 按**功能**判断，不要死抠标题文字：凡是"候选人需要具备/最好具备的条件"就是资格要求；标题怎么写都算。
 - **只提取"候选人需要具备的资格"**：学历、年限、技能、工具、经验、证书、语言等。
 - **绝不要**把 "Responsibilities / 工作职责 / 你将要做什么(will / responsible for / 动词开头的职责句)" 当成要求——那是岗位职责，不是对候选人的资格，一律忽略。
-- 只有当 JD 完全没有任何资格段落时，才从全文推断候选人必须具备的硬性条件。
+- 只有当 JD 完全没有任何资格段落时，才从全文推断候选人必须具备的硬性条件。**如果已经有明确的资格段落**，开头介绍/岗位简介里对候选人的**笼统画像描述**（如 "we are looking for a high-calibre graduate"、"a self-starter"、"this is a junior/entry level position"）**不要**单独抽成一条 must/nice——那是候选人画像的软性描述，不是可核实的资格条目，除非资格段落本身也明确列出了同样的条目（如 Requirements 里写了"应届毕业生优先"）。但资格段落之外**明确的规则性表述**（如用 "requires/must" 说明的到岗安排、工作权限等）仍要提取，只是不要套用画像式描述。
 - 如果 JD 没有 Preferred / 加分 段落，就**不要硬造 nice**；**忽略** LinkedIn 自动生成的 "Desired Skills and Experience" 之类的关键词标签，那不是真正的加分段落。
 - **措辞降级（很重要）**：只要某条带有 ideal / preferred / a plus / nice to have / bonus / desirable / ideally / would be great / 优先 / 最好 / 加分 等"优先而非必需"的措辞，**无论它出现在哪个段落（哪怕在 Requirements 里）**，一律归类为 **nice**，绝不要放进 must。例如 "a master's degree ... is ideal" → nice。
 
 另外，**每一条（无论 must 还是 nice）都要标 soft（true / false）**——区分"可核实的硬条件"和"无法核实的软素质"。判据：**这条能不能在简历里用具体证据核实？**
 - soft=false（硬，可核实）：具体技能/工具/技术（SQL、Python、Azure）、年限、学历专业、特定领域经验、特定方法论、证书、语言。
 - soft=true（软，简历几乎无法证明）：诚实、细心/注意细节、独立工作、责任心、抗压、遵循指南、是否使用某类工具（如"不使用AI写作工具"）、泛泛的"沟通能力/分析能力/批判性思维"等通用素质或态度。
+- **工作安排类条件也算 soft=true**：每周到岗天数 / 混合或远程办公偏好、合同性质（全职/兼职/合同工）等——这些是候选人"是否愿意接受"的安排，不是能力，简历通常也不会写是否接受，一律 soft=true（展示但不计分）。**例外**：真正的签证 / 工作权利 / 国籍 / 居留资格类准入门槛仍是 soft=false 且可能 veto=yes（见下文 veto 规则），不要和普通到岗安排混淆。
 
 还要标出极少数**硬否决项（veto=yes）**——这类条件**与能力高低无关，是客观的"准入资格"**，不具备就连初筛都过不了。**严格仅限以下三类**，且 JD 必须明确表述：
 1. **人类语言**能力被明确要求（如 "Fluency in Thai is required"、"Native German speaker"）；
-2. **工作权利**：工作签证 / work authorization / right to work / 国籍 / 特定居住地（onsite in X）等准入要求；
+2. **工作权利/居留资格**：工作签证 / work authorization / right to work / 国籍 / 必须已定居或愿自费搬迁到某地（如 "must already be based in Germany"、"no visa sponsorship available"）等**准入门槛**；
 3. **法律或行业强制的执照 / 注册资质**（如注册会计师 ACA、护理执照、律师资格、安全许可 security clearance）。
 
 **绝对不要**把下面这些标成 veto（这是最常见的误标）：
 - 编程语言 / 技术 / 工具 / 框架 / 平台（Python、SQL、Word、Excel、Azure、React…）——**即使写在 "Must Have" 里、即使用 strong / required 形容，也只是普通 must，不是 veto**；
 - 学历 / 专业 / 年限 / 院校层次（如 "Russell Group 2.1"、"3+ years"）——是 must，不是 veto；
+- **常规到岗安排**（如 "3 days per week in the office"、hybrid、onsite X days/week）——这是工作方式安排，不是准入资格，不是 veto（而且应标 soft=true，见上文，不计入评分）；
 - 任何 soft 素质、ideal / preferred / 加分项。
 
 判否决要**极其保守**：只有上面三类"客观准入门槛"才算，拿不准一律 veto=no。veto=yes 的条目必然是 must 且 soft=no。
@@ -166,18 +182,35 @@ function matchSystem(lang: string): string {
 - "no"：简历明显不具备
 - "unclear"：简历没提到、无法确认
 宁可保守：没有明确证据就不要给 yes。每条给一句很短的 note（用「${lang}」书写，符合的依据，或缺了什么）。
+
+**表面描述 vs 底层能力（重要，避免误判 unclear）**：有些要求点字面上写的是具体工具名/具体表述，但那只是这项能力的**常见例证**，不是字面本身的硬性门槛——常见信号：要求写在"数据处理/分析""文档能力""沟通协作""理解XX行为"这类通用能力标题下、JD 整体面向非技术背景候选人（如提到"无需工程背景"）、或例子是 Excel/Word/PPT/Google 系列这类入门级通用工具。这种情况下，只要简历显示候选人用更高阶、等价或实质对应的方式（工具、设计、行为）达成了同样的底层能力/关切（如用 Python/SQL/pandas 做数据清洗对应"熟练使用 Excel/Google Sheets"；用"保守匹配、抵制虚高分数、人工审核+审计日志"这类设计对应"理解AI输出的不确定性与用户信任考量"），应判 **yes**，note 里写明"虽未用 JD 的字面表述，但通过 XX 实质达成同等底层能力"。
+**不要**在以下情况套用此规则（这时字面表述本身就是门槛，不能替代）：JD 明确说明这是团队协作/交付媒介、必须对接的具体系统（如"团队用 Salesforce 管理客户数据"）、或字面内容本身就是要求的核心（如"熟练使用 Photoshop"这种专业软件要求，而非泛化的"设计能力"例证）。拿不准就仍按 unclear 处理，不要滥用这条规则抬分。
+
+**枚举类别要求（"A、B、C 或 D"）**：如果一条要求本身是"经验类型 A、B、C 或 D"这种**任选其一**的枚举（常见于"X年XX、YY、ZZ或相关岗位经验"这类表述），只要简历证据命中枚举里的**任意一个**类别，就判 yes，不要因为简历更贴近其中一类、不贴近你主观认为的"默认类别"就判 unclear/no。note 里写明命中的是哪一类。
+
+**复合要求（一条里塞了好几个并列分句）**：如果一条要求包含多个用"、""和""以及"并列的分句（如"翻译需求、设计工作流、撰写用户故事、产出可测试结果"），只要简历证据覆盖了其中**大部分/核心**分句，就判 yes，note 里如实注明哪个分句没有证据；只有当核心分句基本都没体现时，才判 unclear。不要因为漏了一个次要分句就整条判 unclear/no。
+
+**年限区间要求（如"0-2年""1-3年经验"，重要，避免方向判反）**：这类要求里真正要核实的是**经验类型**是否吻合（如"技术/客户对接/软件/云/AI 相关岗位"），年限区间通常是用来标注"这是初级/资历较浅岗位"，不是精确的硬上限。如果候选人证据显示的经验**类型**吻合，但年限明显**超过**区间上限（如区间是 0-2 年，候选人有 3 年以上相关经历/研究），判 **yes**（类型和最低门槛都满足了，"超过上限"不是"经验不够"），note 里如实提醒"经验年限已超过 JD 设定的区间上限，这类初级岗位有时会因'资历过高、预期薪资/留任风险'反而筛掉资深候选人，投递时可注意说明意愿"。**不要**把"年限超过上限"误判成 unclear 或当成"经验不够"处理——这是方向性错误。
+
 保持要求的条数、文字、type 与输入一致。要求点(text)也用「${lang}」书写。
 
-**输出格式（严格遵守，不要用 JSON）**：每条输出四行，字段名后跟冒号；条与条之间用单独一行 \`---\` 分隔。除此之外不要输出任何多余文字或代码块。引号、逗号照常写即可，不需要转义。格式如下：
+**UNCLEAR_REASON 字段（仅当 MET=unclear 时有意义，避免给错建议）**：只有当 MET 判为 unclear 时才需要认真填这个字段，区分两种完全不同的"不确定"：
+- "not_mentioned"：简历**确实没提**这方面的经历/技能，属于"简历表达缺口"——candidate 如果真的具备，补进简历就能满足。
+- "ambiguous"：简历**已经提到**相关经历，只是这条要求本身有解读空间、或候选人证据是否严格满足这条要求存在主观判断空间（如经验类型算不算数、是否算"标准工作经验"等）——这种情况"补进简历"帮不上忙，不要建议候选人去补简历，因为该写的都写了，问题不在简历表达。
+MET 不是 unclear 时，这个字段填 "n/a"。
+
+**输出格式（严格遵守，不要用 JSON）**：每条输出五行，字段名后跟冒号；条与条之间用单独一行 \`---\` 分隔。除此之外不要输出任何多余文字或代码块。引号、逗号照常写即可，不需要转义。格式如下：
 
 TEXT: 要求点（与输入一致）
 TYPE: must 或 nice
 MET: yes 或 no 或 unclear
+UNCLEAR_REASON: not_mentioned 或 ambiguous 或 n/a
 NOTE: 很短的说明
 ---
 TEXT: …
 TYPE: …
 MET: …
+UNCLEAR_REASON: …
 NOTE: …`
 }
 
@@ -347,6 +380,11 @@ function decide(reqs: RequirementMatch[]): { verdict: Verdict, recommendation: s
   const nices = reqs.filter(r => r.type === "nice")
   const mustTotal = musts.length
   const mustMet = musts.filter(r => r.met === "yes").length
+  // "no"（简历明确不具备）和 "unclear"（简历没提到）虽然都不计入 mustMet，
+  // 但含义完全不同：前者是真实差距，后者可能只是简历没写清楚。分开统计，
+  // 避免"大部分是没写清楚"的情况被当成"大部分是真不满足"一样劝退。
+  const mustNo = musts.filter(r => r.met === "no").length
+  const mustUnclear = musts.filter(r => r.met === "unclear").length
   const niceTotal = nices.length
   const niceMet = nices.filter(r => r.met === "yes").length
   const missing = musts.filter(r => r.met !== "yes").map(r => r.text)
@@ -367,12 +405,29 @@ function decide(reqs: RequirementMatch[]): { verdict: Verdict, recommendation: s
     }
   }
 
+  // unclear 内部还要再分：大部分是"简历没写"(not_mentioned，补简历有用)，
+  // 还是大部分是"简历写了但判定有解读空间"(ambiguous，补简历没用)——
+  // 两种情况该给的建议完全不同，选文案时要看这个，不能只看 unclear 的数量。
+  const mustUnclearAmbiguous = musts.filter(r => r.met === "unclear" && r.unclearReason === "ambiguous").length
+  const mustUnclearNotMentioned = mustUnclear - mustUnclearAmbiguous
+
   let verdict: Verdict
+  // "大部分未满足项其实是 unclear"这种情况，不直接判 skip——
+  // 用来选更贴切的 maybe 文案（而不是暗示真的差距很大）。
+  let unclearDominant = false
   if (mustRatio >= 1) {
     verdict = "recommend"
   }
   else if (mustRatio <= 0.5) {
-    verdict = "skip"
+    // 真实不满足(no) 才是硬伤；缺口如果大多是"简历没写"(unclear)而非"明确不具备"(no)，
+    // 不直接判 skip，先升到 maybe，而不是当成和 no 一样的真实差距。
+    if (mustNo > mustUnclear) {
+      verdict = "skip"
+    }
+    else {
+      verdict = "maybe"
+      unclearDominant = true
+    }
   }
   else {
     // 中间档：仅当存在加分项且满足度 ≥70% 时升绿
@@ -388,7 +443,15 @@ function decide(reqs: RequirementMatch[]): { verdict: Verdict, recommendation: s
       : i18n.t("jobMatch.rec.recommendSome", [m, t, missingStr])
   }
   else if (verdict === "maybe") {
-    recommendation = i18n.t("jobMatch.rec.maybe", [m, t, missingStr])
+    if (unclearDominant) {
+      // 缺口里大多是"简历写了但判定有解读空间"，"补简历"这句建议是错的，换一版文案。
+      recommendation = mustUnclearAmbiguous > mustUnclearNotMentioned
+        ? i18n.t("jobMatch.rec.maybeAmbiguous", [m, t, missingStr])
+        : i18n.t("jobMatch.rec.maybeUnclear", [m, t, missingStr])
+    }
+    else {
+      recommendation = i18n.t("jobMatch.rec.maybe", [m, t, missingStr])
+    }
   }
   else {
     recommendation = i18n.t("jobMatch.rec.skip", [m, t])
@@ -406,22 +469,7 @@ export async function analyzeMatch(resume: string, jd: string): Promise<MatchRes
     throw new Error(i18n.t("jobMatch.error.noJd"))
   }
 
-  const config = await storage.getItem<Config>(`local:${CONFIG_STORAGE_KEY}`)
-  if (!config) {
-    throw new Error(i18n.t("jobMatch.error.noConfig"))
-  }
-
-  // 选一个填了 API Key 的 LLM（跳过空的 OpenAI 占位、跳过微软/谷歌纯翻译）。
-  function hasApiKey(p: Config["providersConfig"][number]): boolean {
-    const key = (p as { apiKey?: unknown }).apiKey
-    return typeof key === "string" && key.trim().length > 0
-  }
-  const providers = config.providersConfig
-  const llmWithKey = providers.filter(p => isLLMProvider(p.provider) && hasApiKey(p))
-  const providerId
-    = llmWithKey.find(p => p.enabled)?.id
-      ?? llmWithKey[0]?.id
-      ?? providers.find(p => p.provider === "ollama" && p.enabled)?.id
+  const providerId = await pickLLMProviderId()
   if (!providerId) {
     throw new Error(i18n.t("jobMatch.error.noLlm"))
   }
@@ -470,7 +518,7 @@ export async function analyzeMatch(resume: string, jd: string): Promise<MatchRes
   )
   // Step 3：串行挖隐形要求（避免与上一步并发触发限流）
   const implicit = await extractImplicit(providerId, lang, jd, knownReqs)
-  const rawMatches = parseDelimitedBlocks(matchRaw, ["TEXT", "TYPE", "MET", "NOTE"])
+  const rawMatches = parseDelimitedBlocks(matchRaw, ["TEXT", "TYPE", "MET", "UNCLEAR_REASON", "NOTE"])
   const validMet = new Set(["yes", "no", "unclear"])
   // veto 是 JD 属性，在抽取步已定；按文本匹配接回匹配结果，序号兜底
   const vetoByText = new Map(hardReqs.map(r => [normalizeForMatch(r.text), r.veto]))
@@ -479,10 +527,12 @@ export async function analyzeMatch(resume: string, jd: string): Promise<MatchRes
     .map((m, i) => {
       const met = (m.met ?? "").trim().toLowerCase()
       const veto = vetoByText.get(normalizeForMatch(m.text)) ?? hardReqs[i]?.veto ?? false
+      const unclearReasonRaw = (m.unclear_reason ?? "").trim().toLowerCase()
       return {
         text: m.text.trim(),
         type: (m.type?.toLowerCase().includes("nice") ? "nice" : "must") as ReqType,
         met: (validMet.has(met) ? met : "unclear") as Met,
+        unclearReason: unclearReasonRaw === "ambiguous" ? "ambiguous" : "not_mentioned",
         note: (m.note ?? "").trim() || undefined,
         veto,
       }

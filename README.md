@@ -15,8 +15,8 @@ Built for non-native speakers job-hunting abroad. Forked from the open-source [R
 </p>
 
 <p align="center">
-  <img src="screenshots/match-en.png" width="49%" alt="The same job analysed in English" />
-  <img src="screenshots/match-zh.png" width="49%" alt="…and in 中文 — the UI and the analysis output follow your browser language" />
+  <img src="screenshots/chat-match.png" width="49%" alt="Context-aware AI chat — already knows the job post, your résumé, and your match result" />
+  <img src="screenshots/chat-cover-letter.png" width="49%" alt="One click to draft a cover letter tailored to this specific role" />
 </p>
 
 ## Why

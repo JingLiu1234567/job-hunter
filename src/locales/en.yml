@@ -1307,6 +1307,10 @@ jobMatch:
     preferred: Preferred
     requiredSection: Required
     preferredSection: Preferred
+    workMode:
+      remote: Remote
+      hybrid: Hybrid
+      onsite: On-site
     vetoBadge: deal-breaker
     softSection: Soft skills (mentioned, not scored)
     implicitSection: Other requirements
@@ -1314,6 +1318,7 @@ jobMatch:
     locateHint: Click to find and highlight it in the job post
     locateFailed: Couldn't locate this in the page (the text may be collapsed or hidden)
     resumeGapHint: Not found in your résumé — if you actually have this, add it to meet the requirement
+    ambiguousHint: Your résumé already covers this — whether it strictly meets the requirement is a judgment call, not a résumé gap
     flexibleNote: "✱ The employer says you don't need to meet every requirement — apply if you're a good fit"
     emptyResult: Empty result, please try again
     invalidJson: The model did not return valid JSON
@@ -1325,6 +1330,8 @@ jobMatch:
     recommendAll: "Worth applying: all required met ($1/$2)"
     recommendSome: "Worth applying: required met $1/$2, strong on preferred; only missing $3"
     maybe: "Consider: required met $1/$2; missing $3 — shore these up before applying"
+    maybeUnclear: "Consider: required met $1/$2 — most of what's missing ($3) is likely just not stated on your resume rather than a real gap. Add that experience explicitly before ruling this one out."
+    maybeAmbiguous: "Consider: required met $1/$2 — most of what's missing ($3) is already covered by your resume, it's just a judgment call whether it strictly meets the requirement. Adding more text won't help; weigh it yourself and address it in your application or interview if needed."
     skip: "Not recommended: only $1/$2 required met — a big gap"
     veto: "Not recommended: missing a deal-breaker requirement ($1) — without it you won't pass the initial screen"
     noHard: This role lists no verifiable hard requirements — it's mostly soft skills and attitude, so use your own judgment
@@ -1334,3 +1341,13 @@ jobMatch:
     noConfig: Extension config not found. Configure an LLM provider in settings first
     noLlm: No LLM with an API key found. Add a key for DeepSeek/OpenRouter etc. in settings and enable it
     noReqs: "Couldn't parse the job requirements (captured ~$1 chars, starting with: $2…). Make sure you're on a job detail page"
+  chat:
+    title: AI Chat
+    titleWithProvider: "Chat with $1"
+    placeholder: Ask anything — I can see the current job description, your resume, and the match analysis you just ran
+    inputPlaceholder: Type a message — Enter to send, Shift+Enter for a new line
+    send: Send
+    stop: Stop generating
+    error: Reply failed, please try again
+    coverLetterAction: "✉️ Write cover letter"
+    coverLetterPrompt: Based on the current job description and my resume (and the match analysis results if available), please write a cover letter tailored to this role, in the same language as the job description. First briefly explain your approach — which parts of my resume you're drawing on and why they fit this role — then give the full cover letter.

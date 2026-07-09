@@ -107,13 +107,20 @@ function buildIndex(root: Element): DomIndex {
   return { norm, origin }
 }
 
-/** 在 norm 里找 quote：先整段，找不到再退而求其次找较长前缀。返回 [起, 止)（norm 下标）。 */
-function findRange(norm: string, nq: string): [number, number] | null {
+/**
+ * 在 norm 里找 quote 的一次出现：先整段精确匹配，找不到再退而求其次找较长前缀。
+ * `fromIndex` 用于跳过之前已经试过、但渲染不可见的匹配，找下一个出现位置。
+ * 前缀退化只在第一次查找时用（fromIndex === 0），避免同一个短前缀在页面里到处误命中。
+ * 返回 [起, 止)（norm 下标）。
+ */
+function findRange(norm: string, nq: string, fromIndex = 0): [number, number] | null {
   if (nq.length < 4)
     return null
-  const exact = norm.indexOf(nq)
+  const exact = norm.indexOf(nq, fromIndex)
   if (exact !== -1)
     return [exact, exact + nq.length]
+  if (fromIndex > 0)
+    return null
   // 退化：取 quote 越来越短的前缀，命中较长片段即可
   for (let len = Math.min(nq.length, 120); len >= 20; len -= 10) {
     const prefix = nq.slice(0, len)
@@ -124,9 +131,64 @@ function findRange(norm: string, nq: string): [number, number] | null {
   return null
 }
 
+/**
+ * 判断一个 Range 是否"真的渲染可见"——不少页面（含 LinkedIn 的"...更多"折叠描述）
+ * 会把同一段文字在 DOM 里保留两份：一份折叠隐藏、一份展开可见。如果直接取文本里第一次
+ * 出现的位置去高亮/滚动，很容易勾到隐藏那份，导致滚动结果和肉眼看到的内容对不上。
+ * 这里综合三个信号：元素本身是否 display:none/visibility:hidden、Range 的渲染框是否有
+ * 实际尺寸、以及是否被某个 overflow:hidden/clip 的祖先裁剪掉（常见的文字截断实现）。
+ */
+function isRangeVisible(range: Range): boolean {
+  const rects = range.getClientRects()
+  let hasSize = false
+  for (const r of rects) {
+    if (r.width > 0 && r.height > 0) {
+      hasSize = true
+      break
+    }
+  }
+  if (!hasSize)
+    return false
+
+  const el = range.startContainer.parentElement
+  if (!el)
+    return false
+
+  const checkVisibility = (el as unknown as { checkVisibility?: (opts?: Record<string, boolean>) => boolean }).checkVisibility
+  if (typeof checkVisibility === "function" && !checkVisibility.call(el, { visibilityProperty: true, opacityProperty: true }))
+    return false
+
+  const rect = range.getBoundingClientRect()
+  let ancestor = el.parentElement
+  let depth = 0
+  while (ancestor && depth < 12) {
+    const style = getComputedStyle(ancestor)
+    const clips = style.overflow === "hidden" || style.overflow === "clip" || style.overflowY === "hidden" || style.overflowY === "clip"
+    if (clips) {
+      const aRect = ancestor.getBoundingClientRect()
+      const overlaps = rect.bottom > aRect.top && rect.top < aRect.bottom && rect.right > aRect.left && rect.left < aRect.right
+      if (!overlaps || aRect.height < 4)
+        return false
+    }
+    ancestor = ancestor.parentElement
+    depth++
+  }
+  return true
+}
+
 function scrollRangeIntoView(range: Range) {
   const el = range.startContainer.parentElement
-  el?.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" })
+  if (!el)
+    return
+  el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" })
+  // LinkedIn 这类 SPA 页面滚动过程中常有异步布局变化（图片懒加载、面板展开等），
+  // 滚动动画结束时目标位置可能已经偏移。延迟校正一次，偏差较大才重新滚动。
+  window.setTimeout(() => {
+    const rect = el.getBoundingClientRect()
+    const drift = Math.abs(rect.top + rect.height / 2 - window.innerHeight / 2)
+    if (drift > 60)
+      el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" })
+  }, 400)
 }
 
 // 不支持 Highlight API 时的退化方案：临时给元素上灰底，记录以便还原
@@ -157,24 +219,42 @@ export function highlightQuoteOnPage(quote: string): boolean {
     return false
 
   const { norm, origin } = buildIndex(root)
-  const found = findRange(norm, normalizeQuote(quote))
-  if (!found)
-    return false
+  const nq = normalizeQuote(quote)
 
-  const [start, end] = found
-  const startPos = origin[start]
-  const endPos = origin[end - 1]
-  if (!startPos || !endPos)
-    return false
+  // 同一段 quote 可能在页面里出现多次（如折叠/展开各一份）。逐个试，
+  // 优先用第一个"真正渲染可见"的出现位置；都不可见就退而求其次用第一个匹配，
+  // 保证至少还是能高亮/跳转，而不是直接判定失败。
+  let range: Range | null = null
+  let searchFrom = 0
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const found = findRange(norm, nq, searchFrom)
+    if (!found)
+      break
+    const [start, end] = found
+    const startPos = origin[start]
+    const endPos = origin[end - 1]
+    if (!startPos || !endPos)
+      break
 
-  const range = document.createRange()
-  try {
-    range.setStart(startPos.node, startPos.offset)
-    range.setEnd(endPos.node, endPos.offset + 1)
+    const candidate = document.createRange()
+    try {
+      candidate.setStart(startPos.node, startPos.offset)
+      candidate.setEnd(endPos.node, endPos.offset + 1)
+    }
+    catch {
+      break
+    }
+
+    if (!range)
+      range = candidate
+    if (isRangeVisible(candidate)) {
+      range = candidate
+      break
+    }
+    searchFrom = end
   }
-  catch {
+  if (!range)
     return false
-  }
 
   ensureStyle()
   const registry = highlightRegistry()
