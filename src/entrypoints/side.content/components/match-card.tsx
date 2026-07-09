@@ -1,12 +1,13 @@
 import type { ImplicitRequirement, MatchResult, RequirementMatch, Verdict } from "@/utils/job-match/analyze"
 import { IconCheck, IconLoader2, IconMinus, IconX } from "@tabler/icons-react"
 import { useAtom } from "jotai"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { i18n } from "#imports"
 import { clearQuoteHighlight, highlightQuoteOnPage } from "@/utils/job-match/highlight"
 import { getCardLayout, setCardLayout } from "@/utils/job-match/storage"
 import { cn } from "@/utils/styles/utils"
 import { matchStateAtom } from "../atoms"
+import { useFloatingCard } from "./use-floating-card"
 
 const VERDICT_LABEL_KEY = {
   recommend: "jobMatch.verdict.recommend",
@@ -59,7 +60,7 @@ function RequirementRow({ req }: { req: RequirementMatch }) {
       <div className="min-w-0">
         <span>
           {req.text}
-          {req.veto && (
+          {req.veto && req.met === "no" && (
             <span className="ml-1 inline-block rounded-sm bg-red-100 px-1 py-px align-middle text-[10px] font-semibold text-red-600 dark:bg-red-900 dark:text-red-300">
               {i18n.t("jobMatch.card.vetoBadge")}
             </span>
@@ -68,9 +69,18 @@ function RequirementRow({ req }: { req: RequirementMatch }) {
         {req.note && (
           <span className="block text-[11px] leading-snug text-neutral-400">{req.note}</span>
         )}
-        {req.met === "unclear" && (
+        {req.met === "unclear" && req.unclearReason === "ambiguous" && (
           <span className="mt-0.5 block text-[11px] leading-snug text-amber-600 dark:text-amber-400">
-            ✎ {i18n.t("jobMatch.card.resumeGapHint")}
+            ✎
+            {" "}
+            {i18n.t("jobMatch.card.ambiguousHint")}
+          </span>
+        )}
+        {req.met === "unclear" && req.unclearReason !== "ambiguous" && (
+          <span className="mt-0.5 block text-[11px] leading-snug text-amber-600 dark:text-amber-400">
+            ✎
+            {" "}
+            {i18n.t("jobMatch.card.resumeGapHint")}
           </span>
         )}
       </div>
@@ -130,6 +140,26 @@ function ResultView({ result }: { result: MatchResult }) {
       <p className="rounded-md bg-neutral-100 p-2 text-[13px] leading-relaxed dark:bg-neutral-800">
         💡 {result.recommendation}
       </p>
+
+      {(result.workMode || result.salary) && (
+        <p className="text-[12px] leading-snug text-neutral-500 dark:text-neutral-400">
+          {result.workMode && (
+            <span>
+              📍
+              {" "}
+              {i18n.t(`jobMatch.card.workMode.${result.workMode}`)}
+            </span>
+          )}
+          {result.workMode && result.salary && " · "}
+          {result.salary && (
+            <span>
+              💰
+              {" "}
+              {result.salary}
+            </span>
+          )}
+        </p>
+      )}
 
       {result.flexible && (
         <p className="rounded-md border border-red-400 bg-red-50 p-2 text-[13px] font-semibold leading-relaxed text-red-600 dark:border-red-700 dark:bg-red-950 dark:text-red-400">
@@ -231,103 +261,17 @@ function ResultView({ result }: { result: MatchResult }) {
   )
 }
 
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value))
-}
-
 const MIN_W = 260
 const MIN_H = 160
 
 /** 页面上的匹配判断卡：标题栏可拖动、右下角可缩放、布局记忆到本地；默认右上角。 */
 export default function MatchCard() {
   const [state, setState] = useAtom(matchStateAtom)
-  // null = 未拖动过（用右上角默认样式）；否则用绝对像素坐标
-  const [pos, setPos] = useState<{ x: number, y: number } | null>(null)
-  const [size, setSize] = useState<{ w: number, h: number } | null>(null)
-  const cardRef = useRef<HTMLDivElement>(null)
-  const dragRef = useRef<{ startX: number, startY: number, originX: number, originY: number } | null>(null)
-  const resizeRef = useRef<{ startX: number, startY: number, originW: number, originH: number } | null>(null)
-  const layoutRef = useRef<{ x?: number, y?: number, w?: number, h?: number }>({})
-
-  // 加载记忆的位置/大小
-  useEffect(() => {
-    void getCardLayout().then((layout) => {
-      layoutRef.current = layout
-      if (layout.x != null && layout.y != null)
-        setPos({ x: layout.x, y: layout.y })
-      if (layout.w != null && layout.h != null)
-        setSize({ w: layout.w, h: layout.h })
-    })
-  }, [])
+  const { cardRef, pos, size, onDragStart, onDragMove, onDragEnd, onResizeStart, onResizeMove, onResizeEnd }
+    = useFloatingCard({ getLayout: getCardLayout, setLayout: setCardLayout, minWidth: MIN_W, minHeight: MIN_H })
 
   if (state.status === "idle")
     return null
-
-  const saveLayout = () => void setCardLayout(layoutRef.current)
-
-  // ---- 拖动（标题栏）----
-  const onDragStart = (e: React.PointerEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest("button"))
-      return
-    const rect = cardRef.current?.getBoundingClientRect()
-    if (!rect)
-      return
-    dragRef.current = { startX: e.clientX, startY: e.clientY, originX: rect.left, originY: rect.top }
-    e.currentTarget.setPointerCapture(e.pointerId)
-    e.preventDefault()
-  }
-  const onDragMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current
-    if (!drag)
-      return
-    const rect = cardRef.current?.getBoundingClientRect()
-    const w = rect?.width ?? 320
-    const h = rect?.height ?? 80
-    const next = {
-      x: clamp(drag.originX + (e.clientX - drag.startX), 0, window.innerWidth - w),
-      y: clamp(drag.originY + (e.clientY - drag.startY), 0, window.innerHeight - h),
-    }
-    setPos(next)
-    layoutRef.current = { ...layoutRef.current, ...next }
-  }
-  const onDragEnd = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current)
-      return
-    dragRef.current = null
-    if (e.currentTarget.hasPointerCapture?.(e.pointerId))
-      e.currentTarget.releasePointerCapture(e.pointerId)
-    saveLayout()
-  }
-
-  // ---- 缩放（右下角）----
-  const onResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
-    const rect = cardRef.current?.getBoundingClientRect()
-    if (!rect)
-      return
-    resizeRef.current = { startX: e.clientX, startY: e.clientY, originW: rect.width, originH: rect.height }
-    e.currentTarget.setPointerCapture(e.pointerId)
-    e.preventDefault()
-    e.stopPropagation()
-  }
-  const onResizeMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const rs = resizeRef.current
-    if (!rs)
-      return
-    const next = {
-      w: clamp(rs.originW + (e.clientX - rs.startX), MIN_W, window.innerWidth - 16),
-      h: clamp(rs.originH + (e.clientY - rs.startY), MIN_H, window.innerHeight - 16),
-    }
-    setSize(next)
-    layoutRef.current = { ...layoutRef.current, ...next }
-  }
-  const onResizeEnd = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!resizeRef.current)
-      return
-    resizeRef.current = null
-    if (e.currentTarget.hasPointerCapture?.(e.pointerId))
-      e.currentTarget.releasePointerCapture(e.pointerId)
-    saveLayout()
-  }
 
   return (
     <div

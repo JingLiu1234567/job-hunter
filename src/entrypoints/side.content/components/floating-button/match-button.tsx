@@ -2,7 +2,7 @@ import type { FloatingButtonSide } from "@/types/config/floating-button"
 import { IconTargetArrow } from "@tabler/icons-react"
 import { useAtom } from "jotai"
 import { analyzeMatch } from "@/utils/job-match/analyze"
-import { extractJD } from "@/utils/job-match/extract-jd"
+import { extractJD, extractJobMeta } from "@/utils/job-match/extract-jd"
 import { getResume } from "@/utils/job-match/storage"
 import { cn } from "@/utils/styles/utils"
 import { matchStateAtom } from "../../atoms"
@@ -30,8 +30,9 @@ export default function MatchButton({
     try {
       const resume = await getResume()
       const jd = extractJD()
+      const jobMeta = extractJobMeta(jd)
       const result = await analyzeMatch(resume, jd)
-      setMatchState({ status: "done", result })
+      setMatchState({ status: "done", result: { ...result, ...jobMeta } })
     }
     catch (error) {
       setMatchState({

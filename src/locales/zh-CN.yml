@@ -1307,6 +1307,10 @@ jobMatch:
     preferred: 加分
     requiredSection: 必须要求
     preferredSection: 加分项
+    workMode:
+      remote: 远程办公
+      hybrid: 混合办公
+      onsite: 现场办公
     vetoBadge: 一票否决
     softSection: 软性要求（招聘方提到，未计入评分）
     implicitSection: 其他要求
@@ -1314,6 +1318,7 @@ jobMatch:
     locateHint: 点击在原文中定位并高亮
     locateFailed: 未能在页面中定位到这句（原文可能被折叠或隐藏了）
     resumeGapHint: 简历未提及——若你确实具备，补进简历即可满足这条
+    ambiguousHint: 简历已有相关经历，只是这条要求是否严格满足存在解读空间——补简历帮不上忙
     flexibleNote: "✱ 招聘方说明：不必满足全部要求，方向契合也欢迎投递"
     emptyResult: 匹配结果为空，请重试（模型可能未正确返回）
     invalidJson: 模型未返回有效的 JSON
@@ -1325,6 +1330,8 @@ jobMatch:
     recommendAll: "值得投：硬性要求全部满足（$1/$2）"
     recommendSome: "值得投：硬性要求满足 $1/$2，加分项满足度高，仅差 $3"
     maybe: "可以考虑：硬性要求满足 $1/$2，欠缺 $3，投前最好补强"
+    maybeUnclear: "可以考虑：硬性要求满足 $1/$2，但欠缺的 $3 大多是简历没写清楚（不代表你不具备），建议先把相关经历明确写进简历，而不是直接放弃投递"
+    maybeAmbiguous: "可以考虑：硬性要求满足 $1/$2，但欠缺的 $3 大多是简历已有相关经历、只是是否严格满足存在解读空间（不是简历没写清楚），补简历帮不上忙，建议结合自身情况判断，必要时可在申请材料或面试中主动说明"
     skip: "不建议投：硬性要求只满足 $1/$2，差距较大"
     veto: "不建议投：缺少一票否决的硬性条件（$1）—— 这类要求不满足，基本过不了初筛"
     noHard: 该职位没有可量化的硬性要求，主要看软素质与态度，请结合自身情况判断
@@ -1334,3 +1341,13 @@ jobMatch:
     noConfig: 插件配置未找到，请先在设置里配置 LLM 服务商
     noLlm: 没找到已填 API Key 的大模型(LLM)。请在插件设置里给 DeepSeek/OpenRouter 等填好 API Key 并启用
     noReqs: "没能解析出职位要求（抓到正文约 $1 字，开头：$2…）。确认在职位详情页再试"
+  chat:
+    title: AI 聊天
+    titleWithProvider: "跟 $1 聊天"
+    placeholder: 问点什么吧——我能看到当前职位描述、你的简历，以及刚才跑过的匹配度分析结果
+    inputPlaceholder: 输入消息，Enter 发送，Shift+Enter 换行
+    send: 发送
+    stop: 停止生成
+    error: 回复失败，请重试
+    coverLetterAction: "✉️ 写 Cover Letter"
+    coverLetterPrompt: 请基于当前职位描述和我的简历（如果有匹配度分析结果，也一并参考），帮我写一份针对这个职位的 cover letter，正文语言跟职位描述保持一致。先用中文简单说明你的写作思路——挑了简历里哪些经历、为什么适合这个岗位，然后再给出完整正文。
