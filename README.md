@@ -30,6 +30,7 @@ Tools like LinkedIn Premium or Jobscan tend to **inflate** your fit — a few ov
 - 📍 **Click-to-locate on the page** — click any "other" requirement and the extension scrolls to and **grey-highlights the exact sentence** in the original job post (no DOM mutation — uses the CSS Custom Highlight API).
 - ✎ **Résumé-gap hints** — when a requirement is *unclear* (not found in your résumé rather than clearly failed), it's flagged as *"add this to your résumé if you actually have it"* — turning the checklist into a résumé to-do list.
 - 🚫 **Deal-breaker awareness** — true gating requirements (a required language, work authorization, a legal licence) are tagged as **deal-breakers** and force a 🔴, while wording like *"a degree is ideal"* is auto-downgraded to nice-to-have so it doesn't unfairly sink the score.
+- 💬 **Context-aware AI chat** — a floating chat panel that already knows the job post, your résumé, and your match result; ask it follow-up questions, or have it draft a **cover letter** tailored to this specific role with one click.
 - 🔤 **Inline bilingual translation** — original + translation, paragraph by paragraph; handles dynamic pages like LinkedIn (inherited from Read Frog).
 - 📄 **Paste your résumé** — stored locally and reused for every match.
 - 🌍 **Follows your browser language** — UI *and* the analysis output are in English / 中文 / 日本語 automatically.
