@@ -5,6 +5,8 @@ On any job page it gives you **inline bilingual translation** plus an **honest, 
 
 Built for non-native speakers job-hunting abroad. Forked from the open-source [Read Frog](https://github.com/mengxi-ream/read-frog) and extended with an original job-matching feature.
 
+**🧩 [Install from the Chrome Web Store](https://chromewebstore.google.com/detail/epfjjjckhnbphkngpofkcdjcidoncgal)** — or [build from source](#local-development) below.
+
 <p align="center">
   <img src="screenshots/popup.png" width="78%" alt="Popup — paste your résumé, translate, and run a job match" />
 </p>
