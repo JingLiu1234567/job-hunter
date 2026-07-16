@@ -27,7 +27,7 @@ Tools like LinkedIn Premium or Jobscan tend to **inflate** your fit — a few ov
 
 - 🟢 **Honest match scoring** — extracts the job's real requirements, checks each against your résumé, and gives a 🟢/🟡/🔴 verdict driven by the **must-have** requirements (not vanity metrics).
 - 🔍 **Hidden ("other") requirements** — mines the expectations buried *outside* the formal Requirements section — in responsibilities, culture, work-mode — and groups them by JD section. Things like *"freelance / contract"*, *"3 days/week in office"*, or a tool that only appears in the responsibilities are easy to miss; this surfaces them.
-- 📍 **Click-to-locate on the page** — click any "other" requirement and the extension scrolls to and **grey-highlights the exact sentence** in the original job post (no DOM mutation — uses the CSS Custom Highlight API).
+- 📍 **Click-to-locate on the page** — click any "other" requirement and the extension scrolls to and **grey-highlights the exact sentence** in the original job post, via script-positioned overlay blocks scoped to the job-post container — works even on sites whose CSP silently blocks style-tag-based highlighting.
 - ✎ **Résumé-gap hints** — when a requirement is *unclear* (not found in your résumé rather than clearly failed), it's flagged as *"add this to your résumé if you actually have it"* — turning the checklist into a résumé to-do list.
 - 🚫 **Deal-breaker awareness** — true gating requirements (a required language, work authorization, a legal licence) are tagged as **deal-breakers** and force a 🔴, while wording like *"a degree is ideal"* is auto-downgraded to nice-to-have so it doesn't unfairly sink the score.
 - 💬 **Context-aware AI chat** — a floating chat panel that already knows the job post, your résumé, and your match result; ask it follow-up questions, or have it draft a **cover letter** tailored to this specific role with one click.
@@ -45,11 +45,11 @@ The score is **not** keyword overlap (ATS-style). It's a multi-step LLM pipeline
 3. **Mine the "other" requirements (JD only)** — a separate pass reads the rest of the post and pulls out expectations hidden outside the Requirements section, each backed by a **verbatim quote** from the JD (the quote is validated against the page text, which both blocks hallucination and powers the click-to-locate highlight).
 4. **Verdict by rule** — must-dominant: all musts met → 🟢; ≤ half → 🔴; in between, strong nice-to-haves can lift it to 🟢. A failed **deal-breaker** overrides everything → 🔴. Because the colour comes from a rule over the checklist, *"why this verdict"* is always explainable.
 
-The on-page highlight resolves a model-returned quote to a real DOM `Range` by walking text nodes and matching on normalised text (tolerant of curly quotes, dashes and whitespace), then renders it with the CSS Custom Highlight API — so the page's markup is never touched.
+The job post's content container is located with a selector strategy that falls back to a title-anchor search (e.g. "About the job") when a site's markup/class names change — the same resilient container is reused to scope the on-page highlight, so a short fuzzy match can't land on a sidebar or nav item. The highlight itself resolves a model-returned quote to a real DOM `Range` by walking text nodes and matching on normalised text (tolerant of curly quotes, dashes and whitespace), then paints it as script-positioned overlay blocks — not the CSS Custom Highlight API, since that API's required `<style>` injection is silently blocked by some sites' CSP.
 
 ## Tech stack
 
-WXT · React · TypeScript · Vercel AI SDK (multi-provider LLM) · Tailwind · CSS Custom Highlight API · `@wxt-dev/i18n`.
+WXT · React · TypeScript · Vercel AI SDK (multi-provider LLM) · Tailwind · `@wxt-dev/i18n`.
 
 ## Local development
 

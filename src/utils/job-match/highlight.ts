@@ -1,34 +1,22 @@
 /**
- * 在网页 JD 原文里定位某段 quote 并灰底高亮 + 滚动过去。
- * 用 CSS Custom Highlight API（不改 DOM、不破坏页面/React，可跨节点），
- * 浏览器不支持时退化为给最近的块元素加临时灰底。
+ * 在网页 JD 原文里定位某段 quote：用脚本创建的绝对定位半透明色块叠加高亮 + 滚动过去。
+ * 不用 CSS Custom Highlight API、不注入 <style> 标签——两者都可能被部分站点的
+ * CSP（Content-Security-Policy）悄悄拦截，导致"定位到了、滚动成功了，但看不见高亮"。
+ * 叠加层是独立创建的 DOM 节点、纯 JS 内联样式赋值（不进页面自身的 DOM/React 树），
+ * 这类程序化设置的内联样式不受 style-src 类 CSP 限制。
+ *
+ * 搜索范围限定在 JD 容器元素内（复用 extract-jd.ts 的容器定位逻辑），而不是整个
+ * document.body——否则 quote 精确匹配不到时的短前缀退化匹配，很容易在导航栏、
+ * 筛选标签、侧边栏其它职位列表等无关文字里凑巧撞上，导致高亮/滚动定位到完全不相关的位置。
  */
 
-const HIGHLIGHT_NAME = "jobhunter-locate"
-const STYLE_ID = "jobhunter-locate-style"
+import { findJdContainerElement } from "./extract-jd"
+
 const GRAY = "rgba(148, 163, 184, 0.5)" // 灰色底纹
+const OVERLAY_CLASS = "jobhunter-locate-overlay"
 
 /** 跳过这些容器里的文字：脚本/样式，以及 Read Frog 注入的译文节点 */
 const SKIP_SELECTOR = "script,style,noscript,.read-frog-translated-content-wrapper,.notranslate"
-
-interface HighlightAPI {
-  set: (name: string, h: unknown) => void
-  delete: (name: string) => void
-}
-function highlightRegistry(): HighlightAPI | null {
-  const reg = (CSS as unknown as { highlights?: HighlightAPI }).highlights
-  const Ctor = (globalThis as unknown as { Highlight?: unknown }).Highlight
-  return reg && typeof Ctor === "function" ? reg : null
-}
-
-function ensureStyle() {
-  if (document.getElementById(STYLE_ID))
-    return
-  const style = document.createElement("style")
-  style.id = STYLE_ID
-  style.textContent = `::highlight(${HIGHLIGHT_NAME}){background-color:${GRAY};color:inherit;border-radius:2px;}`
-  document.head.appendChild(style)
-}
 
 /** 单字符归一化（1:1，不改长度）：统一卷曲/直引号、破折号、大小写。 */
 function normChar(ch: string): string {
@@ -176,37 +164,76 @@ function isRangeVisible(range: Range): boolean {
   return true
 }
 
-function scrollRangeIntoView(range: Range) {
-  const el = range.startContainer.parentElement
-  if (!el)
-    return
-  el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" })
-  // LinkedIn 这类 SPA 页面滚动过程中常有异步布局变化（图片懒加载、面板展开等），
-  // 滚动动画结束时目标位置可能已经偏移。延迟校正一次，偏差较大才重新滚动。
-  window.setTimeout(() => {
-    const rect = el.getBoundingClientRect()
-    const drift = Math.abs(rect.top + rect.height / 2 - window.innerHeight / 2)
-    if (drift > 60)
-      el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" })
-  }, 400)
-}
-
-// 不支持 Highlight API 时的退化方案：临时给元素上灰底，记录以便还原
-let fallbackEl: HTMLElement | null = null
-let fallbackPrevBg = ""
-
-function clearFallback() {
-  if (fallbackEl) {
-    fallbackEl.style.backgroundColor = fallbackPrevBg
-    fallbackEl = null
-    fallbackPrevBg = ""
-  }
-}
+// 当前高亮用的叠加层元素；requestToken 用来让"迟到"的滚动回调失效
+// （用户很快点了下一条，旧的 setTimeout 才触发，不该再把旧高亮画出来）。
+let overlays: HTMLElement[] = []
+let requestToken = 0
 
 /** 清除当前高亮。 */
 export function clearQuoteHighlight() {
-  highlightRegistry()?.delete(HIGHLIGHT_NAME)
-  clearFallback()
+  requestToken++
+  for (const el of overlays)
+    el.remove()
+  overlays = []
+}
+
+/** 按 range 当前的渲染矩形，画一批绝对定位的灰色叠加块（跨节点的一段文字可能对应多个矩形）。 */
+function paintOverlays(range: Range) {
+  for (const r of range.getClientRects()) {
+    if (r.width <= 0 || r.height <= 0)
+      continue
+    const el = document.createElement("div")
+    el.className = OVERLAY_CLASS
+    el.style.position = "absolute"
+    el.style.top = `${r.top + window.scrollY}px`
+    el.style.left = `${r.left + window.scrollX}px`
+    el.style.width = `${r.width}px`
+    el.style.height = `${r.height}px`
+    el.style.backgroundColor = GRAY
+    el.style.borderRadius = "2px"
+    el.style.pointerEvents = "none"
+    el.style.zIndex = "2147483647"
+    el.style.opacity = "0"
+    el.style.transition = "opacity 200ms ease-out"
+    document.body.appendChild(el)
+    overlays.push(el)
+    // 先以 opacity:0 插入、强制触发一次 reflow，再改成 1——不这样浏览器会把两次赋值
+    // 合并成一次，直接跳到最终值，不会有渐显效果。
+    void el.offsetWidth
+    el.style.opacity = "1"
+  }
+}
+
+/**
+ * 先滚动、等动画稳定了再画高亮——不在滚动前先画一次再挪一次，避免出现
+ * "先出现在错误位置，滚动完再跳过去"的视觉跳动。`token` 用来丢弃过期回调。
+ */
+function scrollThenPaint(range: Range, token: number) {
+  const el = range.startContainer.parentElement
+  if (!el) {
+    if (token === requestToken)
+      paintOverlays(range)
+    return
+  }
+  el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" })
+  // LinkedIn 这类 SPA 页面滚动过程中常有异步布局变化（图片懒加载、面板展开等），
+  // 滚动动画结束时目标位置可能已经偏移。偏差较大就再校正一次，动画稳定后才画高亮。
+  window.setTimeout(() => {
+    if (token !== requestToken)
+      return
+    const rect = el.getBoundingClientRect()
+    const drift = Math.abs(rect.top + rect.height / 2 - window.innerHeight / 2)
+    if (drift > 60) {
+      el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" })
+      window.setTimeout(() => {
+        if (token === requestToken)
+          paintOverlays(range)
+      }, 400)
+    }
+    else {
+      paintOverlays(range)
+    }
+  }, 400)
 }
 
 /**
@@ -214,7 +241,9 @@ export function clearQuoteHighlight() {
  */
 export function highlightQuoteOnPage(quote: string): boolean {
   clearQuoteHighlight()
-  const root = document.body
+  const token = requestToken
+  // 优先只在 JD 容器内找；抓不到容器（非 LinkedIn 页面/选择器失配）才退化到整页搜索。
+  const root = findJdContainerElement() ?? document.body
   if (!root)
     return false
 
@@ -256,22 +285,6 @@ export function highlightQuoteOnPage(quote: string): boolean {
   if (!range)
     return false
 
-  ensureStyle()
-  const registry = highlightRegistry()
-  if (registry) {
-    const Ctor = (globalThis as unknown as { Highlight: new (r: Range) => unknown }).Highlight
-    registry.set(HIGHLIGHT_NAME, new Ctor(range))
-  }
-  else {
-    // 退化：给最近的元素上灰底
-    const el = range.startContainer.parentElement
-    if (el) {
-      fallbackEl = el
-      fallbackPrevBg = el.style.backgroundColor
-      el.style.backgroundColor = GRAY
-    }
-  }
-
-  scrollRangeIntoView(range)
+  scrollThenPaint(range, token)
   return true
 }

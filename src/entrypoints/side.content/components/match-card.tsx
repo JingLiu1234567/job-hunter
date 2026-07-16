@@ -1,3 +1,4 @@
+import type { RefObject } from "react"
 import type { ImplicitRequirement, MatchResult, RequirementMatch, Verdict } from "@/utils/job-match/analyze"
 import { IconCheck, IconLoader2, IconMinus, IconX } from "@tabler/icons-react"
 import { useAtom } from "jotai"
@@ -88,7 +89,7 @@ function RequirementRow({ req }: { req: RequirementMatch }) {
   )
 }
 
-function ResultView({ result }: { result: MatchResult }) {
+function ResultView({ result, cardRef }: { result: MatchResult, cardRef: RefObject<HTMLDivElement | null> }) {
   const meta = VERDICT_META[result.verdict]
   const musts = result.requirements.filter(r => r.type === "must")
   const nices = result.requirements.filter(r => r.type === "nice")
@@ -107,6 +108,21 @@ function ResultView({ result }: { result: MatchResult }) {
     clearQuoteHighlight()
     return () => clearQuoteHighlight()
   }, [result])
+
+  // 点到卡片以外的地方（比如页面上弹出的 Apply 对话框）：高亮已经不相关了，主动清掉，
+  // 避免残留的高亮块层级过高，穿模盖在后弹出的页面对话框上。
+  // 用整个悬浮卡片（含拖动条/缩放手柄）判断"是否在卡片外"，避免拖动卡片本身也被误判成"点到外面"。
+  useEffect(() => {
+    const handlePointerDown = (e: PointerEvent) => {
+      if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
+        clearQuoteHighlight()
+        setSelectedQuote(null)
+        setFailedQuote(null)
+      }
+    }
+    document.addEventListener("pointerdown", handlePointerDown, true)
+    return () => document.removeEventListener("pointerdown", handlePointerDown, true)
+  }, [cardRef])
 
   const handleImplicitClick = (item: ImplicitRequirement) => {
     // 再点一次同一条 → 取消高亮
@@ -318,7 +334,7 @@ export default function MatchCard() {
           </p>
         )}
 
-        {state.status === "done" && <ResultView result={state.result} />}
+        {state.status === "done" && <ResultView result={state.result} cardRef={cardRef} />}
       </div>
 
       {/* 右下角缩放手柄 */}

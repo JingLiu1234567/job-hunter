@@ -208,15 +208,19 @@ export function extractJobMeta(jd: string): JobMeta {
   }
 }
 
-export function extractJD(): string {
+/**
+ * 找到精确的 JD 容器元素（抗 class 改名）。收集所有可见候选，
+ * 优先"看起来像 JD"的、再按长度，取最佳——绝不会落到 Premium 资料卡上。
+ * 抓不到就返回 null，由调用方决定退化策略。
+ * 供 extractJD()（取文本喂给 LLM）和高亮定位（限定搜索范围，避免撞到导航栏/侧边栏其它职位）共用。
+ */
+export function findJdContainerElement(): HTMLElement | null {
   const body = document.body
   if (!body)
-    return ""
+    return null
 
-  // 1) 首选：精确的 JD 容器（抗 class 改名）。收集所有可见候选，
-  //    优先"看起来像 JD"的、再按长度，取最佳——绝不会落到 Premium 资料卡上。
   const seen = new Set<HTMLElement>()
-  const candidates: { text: string, signal: boolean }[] = []
+  const candidates: { el: HTMLElement, text: string, signal: boolean }[] = []
   for (const selector of LINKEDIN_JD_SELECTORS) {
     for (const el of body.querySelectorAll<HTMLElement>(selector)) {
       if (seen.has(el) || !isVisible(el))
@@ -225,12 +229,68 @@ export function extractJD(): string {
       const raw = el.innerText ?? ""
       if (raw.trim().length < 80)
         continue
-      candidates.push({ text: clean(raw), signal: looksLikeJD(raw) })
+      candidates.push({ el, text: clean(raw), signal: looksLikeJD(raw) })
     }
   }
   candidates.sort((a, b) => Number(b.signal) - Number(a.signal) || b.text.length - a.text.length)
   if (candidates[0] && (candidates[0].signal || candidates[0].text.length > 200)) {
-    return candidates[0].text
+    return candidates[0].el
+  }
+
+  // 选择器全失配（LinkedIn 的 class 名经常变动）：退化用标题锚点找容器。
+  return findContainerByAnchor()
+}
+
+/**
+ * 选择器全失配时的退化方案：找到 JD 标题锚点（"About the job" 等）所在的文本节点，
+ * 从它的父元素往上爬，取一个文本量明显更大、且像 JD 的祖先容器。
+ * 标题文字本身比 class 名稳定得多，抗 LinkedIn 改版能力更强。
+ */
+function findContainerByAnchor(): HTMLElement | null {
+  const body = document.body
+  if (!body)
+    return null
+  const anchors = [...PRIMARY_ANCHORS, ...SECTION_ANCHORS]
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT)
+  let node = walker.nextNode() as Text | null
+  let anchorEl: HTMLElement | null = null
+  while (node) {
+    if (anchors.some(a => node!.data.includes(a))) {
+      anchorEl = node.parentElement
+      break
+    }
+    node = walker.nextNode() as Text | null
+  }
+  if (!anchorEl)
+    return null
+
+  // 从命中锚点的元素往上爬，取文本量明显更大、且像 JD 的祖先容器；
+  // 长度超过 20000 字符大概率已经爬出 JD 正文、覆盖了侧边栏等无关内容，就此打住。
+  let best: HTMLElement | null = null
+  let candidate: HTMLElement | null = anchorEl
+  let depth = 0
+  while (candidate && candidate !== body && depth < 12) {
+    const text = candidate.innerText ?? ""
+    if (text.trim().length > 200 && looksLikeJD(text)) {
+      best = candidate
+      if (text.length > 20000)
+        break
+    }
+    candidate = candidate.parentElement
+    depth++
+  }
+  return best
+}
+
+export function extractJD(): string {
+  const body = document.body
+  if (!body)
+    return ""
+
+  // 1) 首选：精确的 JD 容器（抗 class 改名）。
+  const container = findJdContainerElement()
+  if (container) {
+    return clean(container.innerText ?? "")
   }
 
   // 2) 退化：在整页文字里从 JD 标题锚点切出正文（应对非 LinkedIn 或选择器全失配）。
